@@ -30,9 +30,9 @@ if __name__ == "__main__":
             with open(Path(args.output) / f"shapenetcorev2_hdf5_2048/{stage:s}_files.txt".format(stage_t=stage), "r") as fileref:
                 for file_path in fileref:
                     base_name = Path(file_path.strip()).stem
-                    with open(Path(args.output) / f"shapenetcorev2_hdf5_2048/{base:s}_id2name.json".format(base=base_name), "r") as segment_fileref:
+                    with open(Path(args.output) / f"shapenetcorev2_hdf5_2048/{base_name:s}_id2name.json", "r") as segment_fileref:
                         name_data = json.load(segment_fileref)
-                    with open(Path(args.output) / f"shapenetcorev2_hdf5_2048/{base:s}_id2file.json".format(base=base_name), "r") as segment_fileref:
+                    with open(Path(args.output) / f"shapenetcorev2_hdf5_2048/{base_name:s}_id2file.json", "r") as segment_fileref:
                         file_data = json.load(segment_fileref)
                     file_pc_ids = []
                     file_pc_id = -1
@@ -44,7 +44,7 @@ if __name__ == "__main__":
                         model_descriptions = (category_text_data.loc[category_text_data["modelId"] == model_id])["description"].to_numpy(dtype = "str").tolist()
                         category_stage_descriptions += model_descriptions
                         file_pc_ids += [file_pc_id] * len(model_descriptions)
-                    stage_pc_data = h5py.File(Path(args.output) / "shapenetcorev2_hdf5_2048\{base:s}.h5".format(base=base_name), "r")
+                    stage_pc_data = h5py.File(Path(args.output) / f"shapenetcorev2_hdf5_2048/{base_name:s}.h5", "r")
                     if (type(category_stage_pcs) == type(None)):
                         category_stage_pcs = stage_pc_data.get("data")[()][file_pc_ids]
                     else:
