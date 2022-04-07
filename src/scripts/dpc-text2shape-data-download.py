@@ -1,8 +1,6 @@
 from argparse import ArgumentParser
 from pathlib import Path
 import gdown
-import zipfile
-import os
 
 from utils.paths import DIFFUSION_MODEL_DATA_FOLDER
 
@@ -20,15 +18,11 @@ if __name__ == "__main__":
 
     args = argparser.parse_args()
 
-    output_path: Path = Path(args.output) / 'shapenetcorev2_hdf5_2048.zip'
+    output_path: Path = Path(args.output) / 'text2shape.captions.csv'
     force: bool = args.force
     quiet: bool = args.quiet
 
     assert not output_path.exists() or force, f"Something already exists at {output_path}, pick a new place or use -f."
 
-    data_file_id = '15eG9fdwhBvroPg_NxBQ-1l4_Q1A-_9KC'
+    data_file_id = '1d5DgfcmKz_TlaH1zTTNfzWcMZyQtP859'
     gdown.download(output=str(output_path), quiet=quiet, id=data_file_id)
-
-    with zipfile.ZipFile(Path(args.output) / 'shapenetcorev2_hdf5_2048.zip', 'r') as zip_ref:
-        zip_ref.extractall(Path(args.output))
-    os.remove(Path(args.output) / 'shapenetcorev2_hdf5_2048.zip')
