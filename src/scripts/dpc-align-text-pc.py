@@ -27,12 +27,12 @@ if __name__ == "__main__":
         for stage in ["test", "train", "val"]:
             category_stage_descriptions = []
             category_stage_pcs = None
-            with open(Path(args.output) / "shapenetcorev2_hdf5_2048\{stage_t:s}_files.txt".format(stage_t=stage), "r") as fileref:
+            with open(Path(args.output) / f"shapenetcorev2_hdf5_2048/{stage:s}_files.txt".format(stage_t=stage), "r") as fileref:
                 for file_path in fileref:
                     base_name = Path(file_path.strip()).stem
-                    with open(Path(args.output) / "shapenetcorev2_hdf5_2048\{base:s}_id2name.json".format(base=base_name), "r") as segment_fileref:
+                    with open(Path(args.output) / f"shapenetcorev2_hdf5_2048/{base:s}_id2name.json".format(base=base_name), "r") as segment_fileref:
                         name_data = json.load(segment_fileref)
-                    with open(Path(args.output) / "shapenetcorev2_hdf5_2048\{base:s}_id2file.json".format(base=base_name), "r") as segment_fileref:
+                    with open(Path(args.output) / f"shapenetcorev2_hdf5_2048/{base:s}_id2file.json".format(base=base_name), "r") as segment_fileref:
                         file_data = json.load(segment_fileref)
                     file_pc_ids = []
                     file_pc_id = -1

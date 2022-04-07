@@ -1,0 +1,14 @@
+async-timeout==3.0.1
+beautifulsoup4==4.10.0
+blinker==1.4
+brotlipy==0.7.0
+certifi==2021.5.30
+filelock==3.6.0
+gdown==4.4.0
+google-auth-oauthlib==0.4.1
+olefile==0.46
+protobuf==3.17.2
+pyasn1==0.4.8
+pyasn1-modules==0.2.7
+soupsieve==2.3.1
+torchvision==0.7.0
