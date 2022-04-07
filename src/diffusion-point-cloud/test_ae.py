@@ -31,7 +31,10 @@ for k, v in vars(args).items():
     logger.info('[ARGS::%s] %s' % (k, repr(v)))
 
 # Checkpoint
-ckpt = torch.load(args.ckpt)
+if torch.cuda.is_available():
+    ckpt = torch.load(args.ckpt)
+else:
+    ckpt = torch.load(args.ckpt, map_location=torch.device('cpu'))
 seed_all(ckpt['args'].seed)
 
 # Datasets and loaders
