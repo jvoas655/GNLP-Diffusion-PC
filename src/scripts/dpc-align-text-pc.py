@@ -7,7 +7,7 @@ import os
 import json
 import numpy as np
 
-from utils.paths import DIFFUSION_MODEL_DATA_FOLDER
+from utilities.paths import DIFFUSION_MODEL_DATA_FOLDER
 
 if __name__ == "__main__":
 

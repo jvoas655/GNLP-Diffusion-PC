@@ -19,11 +19,15 @@ class ToyLanguageEncoder(LanguageEncoder):
         self.tokenizer = tokenizer
 
         self.E = torch.nn.Embedding(num_embeddings=len(self.tokenizer.vocabulary), embedding_dim=embedding_size, padding_idx=0)
+        self.C = torch.nn.Conv1d(1, latent_dim, 1)
         self.P = torch.nn.Linear(embedding_size, latent_dim)
 
     def forward(self, x: torch.Tensor):
+        batch_size = x.shape[0]
         embeddings = self.E(x)
-        projections = self.P(embeddings)
+        embeddings = embeddings.view(batch_size, 1, -1)
+        projections = self.C(embeddings)
+        projections = torch.nn.functional.max_pool1d(projections, projections.shape[-1]).squeeze(-1)
         return projections
 
     def encode(self, descriptions: List[str]):

@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 import gdown
 
-from utils.paths import DIFFUSION_MODEL_PRETRAINED_FOLDER
+from utilities.paths import DIFFUSION_MODEL_PRETRAINED_FOLDER
 
 
 if __name__ == "__main__":
