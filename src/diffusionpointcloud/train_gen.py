@@ -34,12 +34,13 @@ parser.add_argument('--sample_num_points', type=int, default=2048)
 parser.add_argument('--kl_weight', type=float, default=0.001)
 parser.add_argument('--residual', type=eval, default=True, choices=[True, False])
 parser.add_argument('--spectral_norm', type=eval, default=False, choices=[True, False])
+parser.add_argument('--resume', type=str, default=None)
 
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default='./data/shapenet.hdf5')
+parser.add_argument('--dataset_path', type=str, default='./data/aligned_pc_data.hdf5')
 parser.add_argument('--categories', type=str_list, default=['airplane'])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
-parser.add_argument('--train_batch_size', type=int, default=128)
+parser.add_argument('--train_batch_size', type=int, default=64)
 parser.add_argument('--val_batch_size', type=int, default=64)
 
 # Optimizer and scheduler
@@ -99,17 +100,26 @@ train_iter = get_data_iterator(DataLoader(
 
 # Model
 logger.info('Building model...')
-if args.model == 'gaussian':
-    model = GaussianVAE(args).to(args.device)
-elif args.model == 'flow':
-    model = FlowVAE(args).to(args.device)
+if args.resume is not None:
+    logger.info('Resuming from checkpoint...')
+    ckpt = torch.load(args.resume)
+    if args.model == 'gaussian':
+        model = GaussianVAE(ckpt['args']).to(args.device)
+    elif args.model == 'flow':
+        model = FlowVAE(ckpt['args']).to(args.device)
+    model.load_state_dict(ckpt['state_dict'])
+else:
+    if args.model == 'gaussian':
+        model = GaussianVAE(args).to(args.device)
+    elif args.model == 'flow':
+        model = FlowVAE(args).to(args.device)
 logger.info(repr(model))
 if args.spectral_norm:
     add_spectral_norm(model, logger=logger)
 
 # Optimizer and scheduler
-optimizer = torch.optim.Adam(model.parameters(), 
-    lr=args.lr, 
+optimizer = torch.optim.Adam(model.parameters(),
+    lr=args.lr,
     weight_decay=args.weight_decay
 )
 scheduler = get_linear_scheduler(

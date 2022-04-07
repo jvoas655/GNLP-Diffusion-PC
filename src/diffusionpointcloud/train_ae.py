@@ -26,10 +26,10 @@ parser.add_argument('--residual', type=eval, default=True, choices=[True, False]
 parser.add_argument('--resume', type=str, default=None)
 
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default='./data/shapenet.hdf5')
-parser.add_argument('--categories', type=str_list, default=['airplane'])
+parser.add_argument('--dataset_path', type=str, default='./data/aligned_pc_data.hdf5')
+parser.add_argument('--categories', type=str_list, default=['table'])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
-parser.add_argument('--train_batch_size', type=int, default=128)
+parser.add_argument('--train_batch_size', type=int, default=64)
 parser.add_argument('--val_batch_size', type=int, default=32)
 parser.add_argument('--rotate', type=eval, default=False, choices=[True, False])
 
@@ -108,8 +108,8 @@ logger.info(repr(model))
 
 
 # Optimizer and scheduler
-optimizer = torch.optim.Adam(model.parameters(), 
-    lr=args.lr, 
+optimizer = torch.optim.Adam(model.parameters(),
+    lr=args.lr,
     weight_decay=args.weight_decay
 )
 scheduler = get_linear_scheduler(
@@ -120,7 +120,7 @@ scheduler = get_linear_scheduler(
     end_lr=args.end_lr
 )
 
-# Train, validate 
+# Train, validate
 def train(it):
     # Load data
     batch = next(train_iter)
@@ -166,7 +166,7 @@ def validate_loss(it):
     all_recons = torch.cat(all_recons, dim=0)
     metrics = EMD_CD(all_recons, all_refs, batch_size=args.val_batch_size)
     cd, emd = metrics['MMD-CD'].item(), metrics['MMD-EMD'].item()
-    
+
     logger.info('[Val] Iter %04d | CD %.6f | EMD %.6f  ' % (it, cd, emd))
     writer.add_scalar('val/cd', cd, it)
     writer.add_scalar('val/emd', emd, it)
