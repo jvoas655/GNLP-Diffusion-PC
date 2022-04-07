@@ -38,7 +38,7 @@ parser.add_argument('--resume', type=str, default=None)
 
 # Datasets and loaders
 parser.add_argument('--dataset_path', type=str, default='./data/aligned_pc_data.hdf5')
-parser.add_argument('--categories', type=str_list, default=['airplane'])
+parser.add_argument('--categories', type=str_list, default=['table'])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
 parser.add_argument('--train_batch_size', type=int, default=64)
 parser.add_argument('--val_batch_size', type=int, default=64)

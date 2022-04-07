@@ -14,7 +14,7 @@ from evaluation import EMD_CD
 # Arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--ckpt', type=str, default='./pretrained/AE_airplane.pt')
-parser.add_argument('--categories', type=str_list, default=['airplane'])
+parser.add_argument('--categories', type=str_list, default=['table'])
 parser.add_argument('--save_dir', type=str, default='./results')
 parser.add_argument('--device', type=str, default='cuda')
 # Datasets and loaders
