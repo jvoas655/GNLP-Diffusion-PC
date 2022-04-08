@@ -41,6 +41,8 @@ if __name__ == "__main__":
                            help='Shapenet File location, default is (Diffusion Models Directory under data/)',
                            default=str(DIFFUSION_MODEL_DATA_FOLDER))
 
+    args = argparser.parse_args()
+
     text_data = pd.read_csv(Path(args.output) / "text2shape.captions.csv")[["modelId", "category", "description"]]
     categories = text_data["category"].unique()
     output_pc_h5 = h5py.File(Path(args.output) / "aligned_pc_data.hdf5", 'w')

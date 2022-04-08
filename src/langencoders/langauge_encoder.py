@@ -9,3 +9,6 @@ class LanguageEncoder(nn.Module):
 
     def encode(self, descriptions: List[str]):
         raise NotImplementedError("Implement the encode function for all LanguageEncoders")
+
+    def train(self):
+        pass
