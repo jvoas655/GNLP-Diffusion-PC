@@ -35,7 +35,7 @@ class T5Enconder(LanguageEncoder):
         hidden = self.model.encoder(input_ids=x)[0]
 
         # TODO - we almost definitely want to do more things to this encoding than reduce the dimensions right?
-        map = self.C1(hidden.view(batch_size, -1))
+        map = self.C1(hidden.view(batch_size, 1, -1))
 
         embedding = torch.nn.functional.avg_pool1d(map, map.shape[-1]).squeeze(-1)
         embedding = embedding.view(batch_size, -1)

@@ -47,15 +47,25 @@ class NaturalLanguageShapeNetCore(Dataset):
             text_data_file: Path = DIFFUSION_MODEL_DATA_FOLDER / 'aligned_text_data.hdf5',
             cached_embeddings_file: Path = DIFFUSION_MODEL_DATA_FOLDER / 'cached_embeddings_data.npy',
             text_category_ids: List[str] = ('04379243'),
-            data_fold: str = 'train'
+            data_fold: str = 'train',
+            max_size: int = -1
     ):
         # TODO - get cached embeddings.
         text_data_file = h5py.File(str(text_data_file), 'r')
         text_data = text_data_file[text_category_ids][data_fold]
 
-        point_clouds = [np.load(str(cached_embeddings_file))]
+        encoding = 'utf-8'
+        descriptions = [x.decode(encoding) for x in text_data]
 
-        return NaturalLanguageShapeNetCore(text_data, point_clouds)
+        point_clouds = np.load(str(cached_embeddings_file))
+
+        if max_size > -1:
+            descriptions = descriptions[0:min(len(descriptions), max_size)]
+            point_clouds = point_clouds[0:min(len(point_clouds), max_size)]
+
+        return NaturalLanguageShapeNetCore([descriptions], [point_clouds])
 
 if __name__ == "__main__":
     dataset = NaturalLanguageShapeNetCore.from_h5_file()
+    for idx, (desc, cache) in enumerate(dataset):
+        print(desc)

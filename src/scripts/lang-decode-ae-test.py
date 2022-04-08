@@ -12,28 +12,22 @@ from diffusionpointcloud.evaluation import EMD_CD
 from utilities.paths import DIFFUSION_MODEL_PRETRAINED_FOLDER, DIFFUSION_MODEL_RESULTS_FOLDER, DIFFUSION_MODEL_DATA_FOLDER
 
 # TODO - make this selection of encoder an argument in the CLI
-from langencoders.encoders.toy import ToyLanguageEncoder
-from langencoders.utils.vocabulary import Tokenizer, Vocabulary
+from langencoders.encoders.t5 import T5Enconder
+
 
 
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--ckpt', type=str, default=str(DIFFUSION_MODEL_PRETRAINED_FOLDER / 'AE_airplane.pt'))
-parser.add_argument('--categories', type=str_list, default=['airplane'])
+parser.add_argument('--ckpt', type=str, default=str(DIFFUSION_MODEL_PRETRAINED_FOLDER / 'AE_all.pt'))
+parser.add_argument('--categories', type=str_list, default=['table'])
 parser.add_argument('--save_dir', type=str, default=str(DIFFUSION_MODEL_RESULTS_FOLDER))
-parser.add_argument('--device', type=str, default='cuda')
+parser.add_argument('--device', '-d', type=str, default='cuda')
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default=str(DIFFUSION_MODEL_DATA_FOLDER / 'shapenet.hdf5'))
+parser.add_argument('--dataset_path', type=str, default=str(DIFFUSION_MODEL_DATA_FOLDER / 'aligned_pc_data.hdf5'))
+parser.add_argument('--lang_dataset_path', type=str, default=str(DIFFUSION_MODEL_DATA_FOLDER / 'aligned_text_data.hdf5'))
+
 parser.add_argument('--batch_size', type=int, default=128)
 args = parser.parse_args()
-
-# Logging
-save_dir = os.path.join(args.save_dir, 'AE_Ours_%s_%d' % ('_'.join(args.categories), int(time.time())) )
-if not os.path.exists(save_dir):
-    os.makedirs(save_dir)
-logger = get_logger('test', save_dir)
-for k, v in vars(args).items():
-    logger.info('[ARGS::%s] %s' % (k, repr(v)))
 
 ckpt = DIFFUSION_MODEL_PRETRAINED_FOLDER / args.ckpt
 
@@ -45,37 +39,36 @@ else:
 seed_all(ckpt['args'].seed)
 
 # Datasets and loaders
-logger.info('Loading datasets...')
-test_dset = ShapeNetCore(
+dataset = ShapeNetCore(
     path=args.dataset_path,
+    lang_path=args.lang_dataset_path,
     cates=args.categories,
-    split='test',
+    split='train',
     scale_mode=ckpt['args'].scale_mode
 )
-test_loader = DataLoader(test_dset, batch_size=args.batch_size, num_workers=0)
+dataloader = DataLoader(dataset, batch_size=args.batch_size, num_workers=0)
 
 # Model
-logger.info('Loading model...')
 model = AutoEncoder(ckpt['args']).to(args.device)
 model.load_state_dict(ckpt['state_dict'])
 
-desc = ["A chair with three legs."]
-vocab = Vocabulary.create_word_vocab([x.split(" ") for x in desc], 100)
-tokenizer = Tokenizer(vocab)
-lang_model = ToyLanguageEncoder(tokenizer)
+lang_model = T5Enconder()
+lang_model.load_state_dict(torch.load(DIFFUSION_MODEL_PRETRAINED_FOLDER / 'language_test.pt'))
+lang_model.to(args.device)
 
 all_ref = []
 all_recons = []
 all_lang_recons = []
 
-for i, batch in enumerate(tqdm(test_loader)):
+for i, batch in enumerate(tqdm(dataloader)):
     ref = batch['pointcloud'].to(args.device)
     shift = batch['shift'].to(args.device)
     scale = batch['scale'].to(args.device)
+    descriptions = batch['description']
     model.eval()
     with torch.no_grad():
         code = model.encode(ref)
-        lang_code = lang_model.encode(desc)
+        lang_code = lang_model.encode(descriptions)
         recons = model.decode(code, ref.size(1), flexibility=ckpt['args'].flexibility).detach()
         lang_recons = model.decode(lang_code, ref.size(1), flexibility=ckpt['args'].flexibility).detach()
 
@@ -93,9 +86,8 @@ all_ref = torch.cat(all_ref, dim=0)
 all_recons = torch.cat(all_recons, dim=0)
 all_lang_recons = torch.cat(all_lang_recons, dim=0)
 
-logger.info('Saving point clouds...')
-np.save(os.path.join(save_dir, 'ref.npy'), all_ref.numpy())
-np.save(os.path.join(save_dir, 'out.npy'), all_recons.numpy())
-np.save(os.path.join(save_dir, 'lang_out.npy'), all_lang_recons.numpy())
+np.save(os.path.join(args.save_dir, 'ref.npy'), all_ref.numpy())
+np.save(os.path.join(args.save_dir, 'out.npy'), all_recons.numpy())
+np.save(os.path.join(args.save_dir, 'lang_out.npy'), all_lang_recons.numpy())
 
 

@@ -38,7 +38,7 @@ class ShapeNetCore(Dataset):
 
     GRAVITATIONAL_AXIS = 1
     
-    def __init__(self, path, cates, split, scale_mode, transform=None):
+    def __init__(self, path, cates, split, scale_mode, transform=None, lang_path=None):
         super().__init__()
         assert isinstance(cates, list), '`cates` must be a list of cate names.'
         assert split in ('train', 'val', 'test')
@@ -54,6 +54,9 @@ class ShapeNetCore(Dataset):
 
         self.pointclouds = []
         self.stats = None
+
+        self.lang_path = lang_path
+        self.descriptions = None
 
         self.get_statistics()
         self.load()
@@ -130,6 +133,17 @@ class ShapeNetCore(Dataset):
                     'scale': scale
                 })
 
+        if self.lang_path:
+            text_data_file = h5py.File(str(self.lang_path), 'r')
+            # TODO - I am lazy, we need to figure out how to make this work (really descs don't need to be here, but
+            #  the shift/scale of a point cloud need to be in the lang dataset, this is temporary)
+            text_data = text_data_file['04379243']['train']
+
+            encoding = 'utf-8'
+            self.descriptions = [x.decode(encoding) for x in text_data]
+
+            assert len(self.descriptions) == len(self.pointclouds), 'data lengths do not match'
+
         # Deterministically shuffle the dataset
         self.pointclouds.sort(key=lambda data: data['id'], reverse=False)
         random.Random(2020).shuffle(self.pointclouds)
@@ -139,6 +153,8 @@ class ShapeNetCore(Dataset):
 
     def __getitem__(self, idx):
         data = {k:v.clone() if isinstance(v, torch.Tensor) else copy(v) for k, v in self.pointclouds[idx].items()}
+        if self.descriptions:
+            data['description'] = self.descriptions[idx]
         if self.transform is not None:
             data = self.transform(data)
         return data
