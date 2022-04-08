@@ -26,7 +26,7 @@ class LanguageEncoder(nn.Module):
 
             encodings = self.encode(descriptions)
 
-            loss = criterion(encodings, embeddings)
+            loss = criterion(embeddings, encodings)
             loss.backward()
 
             optimizer.step()
@@ -40,13 +40,14 @@ if __name__ == "__main__":
 
     dataset = NaturalLanguageShapeNetCore.from_h5_file(max_size=2)
     dataloader = DataLoader(dataset, batch_size=16, num_workers=0)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.MSELoss()
 
     model = T5Enconder()
     optimizer = optim.Adam(model.parameters(recurse=True), lr=0.001)
 
     model.train()
-    model.train_epoch(dataloader, criterion=criterion, optimizer=optimizer)
+    for i in range(5):
+        model.train_epoch(dataloader, criterion=criterion, optimizer=optimizer)
 
     torch.save(model.state_dict(), str(DIFFUSION_MODEL_PRETRAINED_FOLDER / 'language_test.pt'))
 
