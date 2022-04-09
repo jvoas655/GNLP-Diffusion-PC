@@ -6,6 +6,8 @@ from torch.utils.data import Dataset
 import numpy as np
 import h5py
 from tqdm.auto import tqdm
+from typing import List, Callable
+from pathlib import Path
 
 
 synsetid_to_cate = {
@@ -37,8 +39,8 @@ cate_to_synsetid = {v: k for k, v in synsetid_to_cate.items()}
 class ShapeNetCore(Dataset):
 
     GRAVITATIONAL_AXIS = 1
-    
-    def __init__(self, path, cates, split, scale_mode, transform=None, lang_path=None):
+
+    def __init__(self, path, cates, split, scale_mode, transform=None):
         super().__init__()
         assert isinstance(cates, list), '`cates` must be a list of cate names.'
         assert split in ('train', 'val', 'test')
@@ -54,9 +56,6 @@ class ShapeNetCore(Dataset):
 
         self.pointclouds = []
         self.stats = None
-
-        self.lang_path = lang_path
-        self.descriptions = None
 
         self.get_statistics()
         self.load()
@@ -98,7 +97,7 @@ class ShapeNetCore(Dataset):
                 cate_name = synsetid_to_cate[synsetid]
                 for j, pc in enumerate(f[synsetid][self.split]):
                     yield torch.from_numpy(pc), j, cate_name
-        
+
         with h5py.File(self.path, mode='r') as f:
             for pc, pc_id, cate_name in _enumerate_pointclouds(f):
 
@@ -133,17 +132,6 @@ class ShapeNetCore(Dataset):
                     'scale': scale
                 })
 
-        if self.lang_path:
-            text_data_file = h5py.File(str(self.lang_path), 'r')
-            # TODO - I am lazy, we need to figure out how to make this work (really descs don't need to be here, but
-            #  the shift/scale of a point cloud need to be in the lang dataset, this is temporary)
-            text_data = text_data_file['04379243']['train']
-
-            encoding = 'utf-8'
-            self.descriptions = [x.decode(encoding) for x in text_data]
-
-            assert len(self.descriptions) == len(self.pointclouds), 'data lengths do not match'
-
         # Deterministically shuffle the dataset
         self.pointclouds.sort(key=lambda data: data['id'], reverse=False)
         random.Random(2020).shuffle(self.pointclouds)
@@ -153,9 +141,56 @@ class ShapeNetCore(Dataset):
 
     def __getitem__(self, idx):
         data = {k:v.clone() if isinstance(v, torch.Tensor) else copy(v) for k, v in self.pointclouds[idx].items()}
-        if self.descriptions:
-            data['description'] = self.descriptions[idx]
         if self.transform is not None:
             data = self.transform(data)
         return data
 
+class NLShapeNetCoreEmbeddings(Dataset):
+
+    def __init__(self, desc_path, embedding_path, tokenizer, cates, split, transform: Callable = None):
+        super().__init__()
+        assert isinstance(cates, list), '`cates` must be a list of cate names.'
+        assert split in ('train', 'val', 'test')
+        self.desc_path = desc_path
+        self.embedding_path = embedding_path
+        self.tokenizer = tokenizer
+        if 'all' in cates:
+            cates = cate_to_synsetid.keys()
+        self.cate_synsetids = [cate_to_synsetid[s] for s in cates]
+        self.cate_synsetids.sort()
+        self.split = split
+        self.transform = transform
+
+        self.pointclouds = []
+        self.stats = None
+
+        self.descriptions = []
+        self.embeddings = []
+        self.token_vectors = []
+        self.get_statistics()
+        self.load()
+
+        assert len(self.descriptions) == len(self.embeddings), 'number of descriptions does NOT match number of pcs.'
+
+        self.transform = transform
+    def get_statistics(self):
+        return
+
+    def load(self):
+        text_data_file = h5py.File(self.desc_path)
+        cached_embeddings_file = h5py.File(self.embedding_path)
+        encoding = 'utf-8'
+        for synsetid in self.cate_synsetids:
+            for j, desc in enumerate(text_data_file[synsetid][self.split]):
+                self.descriptions = [x.decode(desc) for x in text_data]
+            for j, desc in enumerate(cached_embeddings_file[synsetid][self.split]):
+                self.embeddings = cached_embeddings_file
+        self.token_vectors = self.tokenizer([task_prefix + desc for desc in self.descriptions], padding="longest", return_tensors="pt")
+    def __len__(self):
+        return len(self.descriptions)
+
+    def __getitem__(self, idx):
+        return self.token_vectors[idx, :], self.embeddings[idx, :]
+
+class NLShapeNetCoreJoint(Dataset):
+    pass # Will be a join contrastive learning algo

@@ -48,4 +48,3 @@ class PointNetEncoder(nn.Module):
 
         # Returns both mean and logvariance, just ignore the latter in deteministic cases.
         return m, v
-

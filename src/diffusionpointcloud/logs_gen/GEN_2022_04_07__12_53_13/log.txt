@@ -1,0 +1,247 @@
+[2022-04-07 12:53:13,219::train::INFO] Namespace(model='flow', latent_dim=256, num_steps=100, beta_1=0.0001, beta_T=0.02, sched_mode='linear', flexibility=0.0, truncate_std=2.0, latent_flow_depth=14, latent_flow_hidden_dim=256, num_samples=4, sample_num_points=2048, kl_weight=0.001, residual=True, spectral_norm=False, resume=None, dataset_path='./data/aligned_pc_data.hdf5', categories=['table'], scale_mode='shape_unit', train_batch_size=64, val_batch_size=64, lr=0.002, weight_decay=0, max_grad_norm=10, end_lr=0.0001, sched_start_epoch=200000, sched_end_epoch=400000, seed=2020, logging=True, log_root='./logs_gen', device='cuda', max_iters=inf, val_freq=1000, test_freq=30000, test_size=400, tag=None)
+[2022-04-07 12:53:13,220::train::INFO] Loading datasets...
+[2022-04-07 12:53:15,355::train::INFO] Building model...
+[2022-04-07 12:53:15,537::train::INFO] FlowVAE(
+  (encoder): PointNetEncoder(
+    (conv1): Conv1d(3, 128, kernel_size=(1,), stride=(1,))
+    (conv2): Conv1d(128, 128, kernel_size=(1,), stride=(1,))
+    (conv3): Conv1d(128, 256, kernel_size=(1,), stride=(1,))
+    (conv4): Conv1d(256, 512, kernel_size=(1,), stride=(1,))
+    (bn1): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (bn2): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (bn3): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (bn4): BatchNorm1d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (fc1_m): Linear(in_features=512, out_features=256, bias=True)
+    (fc2_m): Linear(in_features=256, out_features=128, bias=True)
+    (fc3_m): Linear(in_features=128, out_features=256, bias=True)
+    (fc_bn1_m): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (fc_bn2_m): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (fc1_v): Linear(in_features=512, out_features=256, bias=True)
+    (fc2_v): Linear(in_features=256, out_features=128, bias=True)
+    (fc3_v): Linear(in_features=128, out_features=256, bias=True)
+    (fc_bn1_v): BatchNorm1d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (fc_bn2_v): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (flow): SequentialFlow(
+    (chain): ModuleList(
+      (0): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (1): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (2): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (3): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (4): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (5): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (6): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (7): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (8): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (9): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (10): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (11): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (12): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+      (13): CouplingLayer(
+        (net_s_t): Sequential(
+          (0): Linear(in_features=128, out_features=256, bias=True)
+          (1): ReLU(inplace=True)
+          (2): Linear(in_features=256, out_features=256, bias=True)
+          (3): ReLU(inplace=True)
+          (4): Linear(in_features=256, out_features=256, bias=True)
+        )
+      )
+    )
+  )
+  (diffusion): DiffusionPoint(
+    (net): PointwiseNet(
+      (layers): ModuleList(
+        (0): ConcatSquashLinear(
+          (_layer): Linear(in_features=3, out_features=128, bias=True)
+          (_hyper_bias): Linear(in_features=259, out_features=128, bias=False)
+          (_hyper_gate): Linear(in_features=259, out_features=128, bias=True)
+        )
+        (1): ConcatSquashLinear(
+          (_layer): Linear(in_features=128, out_features=256, bias=True)
+          (_hyper_bias): Linear(in_features=259, out_features=256, bias=False)
+          (_hyper_gate): Linear(in_features=259, out_features=256, bias=True)
+        )
+        (2): ConcatSquashLinear(
+          (_layer): Linear(in_features=256, out_features=512, bias=True)
+          (_hyper_bias): Linear(in_features=259, out_features=512, bias=False)
+          (_hyper_gate): Linear(in_features=259, out_features=512, bias=True)
+        )
+        (3): ConcatSquashLinear(
+          (_layer): Linear(in_features=512, out_features=256, bias=True)
+          (_hyper_bias): Linear(in_features=259, out_features=256, bias=False)
+          (_hyper_gate): Linear(in_features=259, out_features=256, bias=True)
+        )
+        (4): ConcatSquashLinear(
+          (_layer): Linear(in_features=256, out_features=128, bias=True)
+          (_hyper_bias): Linear(in_features=259, out_features=128, bias=False)
+          (_hyper_gate): Linear(in_features=259, out_features=128, bias=True)
+        )
+        (5): ConcatSquashLinear(
+          (_layer): Linear(in_features=128, out_features=3, bias=True)
+          (_hyper_bias): Linear(in_features=259, out_features=3, bias=False)
+          (_hyper_gate): Linear(in_features=259, out_features=3, bias=True)
+        )
+      )
+    )
+    (var_sched): VarianceSchedule()
+  )
+)
+[2022-04-07 12:53:15,540::train::INFO] Start training...
+[2022-04-07 12:53:18,694::train::INFO] [Train] Iter 0001 | Loss 61.635571 | Grad 4.6859 | KLWeight 0.0010
+[2022-04-07 12:53:18,783::train::INFO] [Train] Iter 0002 | Loss 61.686935 | Grad 4.2022 | KLWeight 0.0010
+[2022-04-07 12:53:18,863::train::INFO] [Train] Iter 0003 | Loss 61.605930 | Grad 3.0830 | KLWeight 0.0010
+[2022-04-07 12:53:18,942::train::INFO] [Train] Iter 0004 | Loss 61.494389 | Grad 2.4141 | KLWeight 0.0010
+[2022-04-07 12:53:19,015::train::INFO] [Train] Iter 0005 | Loss 61.533546 | Grad 2.0241 | KLWeight 0.0010
+[2022-04-07 12:53:19,093::train::INFO] [Train] Iter 0006 | Loss 61.429913 | Grad 2.0492 | KLWeight 0.0010
+[2022-04-07 12:53:19,170::train::INFO] [Train] Iter 0007 | Loss 61.327229 | Grad 1.9328 | KLWeight 0.0010
+[2022-04-07 12:53:19,247::train::INFO] [Train] Iter 0008 | Loss 61.387203 | Grad 1.8085 | KLWeight 0.0010
+[2022-04-07 12:53:19,325::train::INFO] [Train] Iter 0009 | Loss 61.288258 | Grad 1.1832 | KLWeight 0.0010
+[2022-04-07 12:53:19,402::train::INFO] [Train] Iter 0010 | Loss 61.400467 | Grad 1.2560 | KLWeight 0.0010
+[2022-04-07 12:53:19,480::train::INFO] [Train] Iter 0011 | Loss 61.382923 | Grad 1.1438 | KLWeight 0.0010
+[2022-04-07 12:53:19,557::train::INFO] [Train] Iter 0012 | Loss 61.291977 | Grad 1.1777 | KLWeight 0.0010
+[2022-04-07 12:53:19,634::train::INFO] [Train] Iter 0013 | Loss 61.391533 | Grad 0.9658 | KLWeight 0.0010
+[2022-04-07 12:53:19,712::train::INFO] [Train] Iter 0014 | Loss 61.344112 | Grad 1.1107 | KLWeight 0.0010
+[2022-04-07 12:53:19,789::train::INFO] [Train] Iter 0015 | Loss 61.219101 | Grad 0.8169 | KLWeight 0.0010
+[2022-04-07 12:53:19,866::train::INFO] [Train] Iter 0016 | Loss 61.168949 | Grad 0.8374 | KLWeight 0.0010
+[2022-04-07 12:53:19,943::train::INFO] [Train] Iter 0017 | Loss 61.195881 | Grad 0.6577 | KLWeight 0.0010
+[2022-04-07 12:53:20,020::train::INFO] [Train] Iter 0018 | Loss 61.175671 | Grad 0.6557 | KLWeight 0.0010
+[2022-04-07 12:53:20,103::train::INFO] [Train] Iter 0019 | Loss 61.252468 | Grad 0.6299 | KLWeight 0.0010
+[2022-04-07 12:53:20,175::train::INFO] [Train] Iter 0020 | Loss 61.162170 | Grad 0.6639 | KLWeight 0.0010
+[2022-04-07 12:53:20,253::train::INFO] [Train] Iter 0021 | Loss 61.153984 | Grad 0.6749 | KLWeight 0.0010
+[2022-04-07 12:53:20,330::train::INFO] [Train] Iter 0022 | Loss 61.136711 | Grad 0.5705 | KLWeight 0.0010
+[2022-04-07 12:53:20,407::train::INFO] [Train] Iter 0023 | Loss 61.156422 | Grad 0.6156 | KLWeight 0.0010
+[2022-04-07 12:53:20,484::train::INFO] [Train] Iter 0024 | Loss 61.175457 | Grad 0.7031 | KLWeight 0.0010
+[2022-04-07 12:53:20,561::train::INFO] [Train] Iter 0025 | Loss 61.152542 | Grad 0.8715 | KLWeight 0.0010
+[2022-04-07 12:53:20,638::train::INFO] [Train] Iter 0026 | Loss 61.027248 | Grad 1.0195 | KLWeight 0.0010
+[2022-04-07 12:53:20,715::train::INFO] [Train] Iter 0027 | Loss 61.074165 | Grad 1.5151 | KLWeight 0.0010
+[2022-04-07 12:53:20,793::train::INFO] [Train] Iter 0028 | Loss 60.946381 | Grad 1.2893 | KLWeight 0.0010
+[2022-04-07 12:53:20,870::train::INFO] [Train] Iter 0029 | Loss 60.975361 | Grad 0.8385 | KLWeight 0.0010
+[2022-04-07 12:53:20,948::train::INFO] [Train] Iter 0030 | Loss 60.922810 | Grad 1.1390 | KLWeight 0.0010
+[2022-04-07 12:53:21,025::train::INFO] [Train] Iter 0031 | Loss 60.876728 | Grad 0.6103 | KLWeight 0.0010
+[2022-04-07 12:53:21,102::train::INFO] [Train] Iter 0032 | Loss 60.867683 | Grad 0.7101 | KLWeight 0.0010
+[2022-04-07 12:53:21,179::train::INFO] [Train] Iter 0033 | Loss 60.889996 | Grad 0.7390 | KLWeight 0.0010
+[2022-04-07 12:53:21,256::train::INFO] [Train] Iter 0034 | Loss 60.931377 | Grad 0.6339 | KLWeight 0.0010
+[2022-04-07 12:53:21,334::train::INFO] [Train] Iter 0035 | Loss 60.909115 | Grad 0.6917 | KLWeight 0.0010
+[2022-04-07 12:53:21,411::train::INFO] [Train] Iter 0036 | Loss 60.843876 | Grad 0.9680 | KLWeight 0.0010
+[2022-04-07 12:53:21,488::train::INFO] [Train] Iter 0037 | Loss 60.840588 | Grad 0.6177 | KLWeight 0.0010
+[2022-04-07 12:53:21,565::train::INFO] [Train] Iter 0038 | Loss 60.841057 | Grad 0.6084 | KLWeight 0.0010
+[2022-04-07 12:53:21,643::train::INFO] [Train] Iter 0039 | Loss 60.821629 | Grad 0.5653 | KLWeight 0.0010
+[2022-04-07 12:53:21,713::train::INFO] [Train] Iter 0040 | Loss 60.812809 | Grad 0.7259 | KLWeight 0.0010
+[2022-04-07 12:53:21,787::train::INFO] [Train] Iter 0041 | Loss 60.858017 | Grad 0.7873 | KLWeight 0.0010
+[2022-04-07 12:53:21,859::train::INFO] [Train] Iter 0042 | Loss 60.770283 | Grad 0.8133 | KLWeight 0.0010
+[2022-04-07 12:53:21,936::train::INFO] [Train] Iter 0043 | Loss 60.793758 | Grad 0.5783 | KLWeight 0.0010
+[2022-04-07 12:53:22,014::train::INFO] [Train] Iter 0044 | Loss 60.802750 | Grad 0.8454 | KLWeight 0.0010
+[2022-04-07 12:53:22,086::train::INFO] [Train] Iter 0045 | Loss 60.805492 | Grad 0.6992 | KLWeight 0.0010
+[2022-04-07 12:53:22,157::train::INFO] [Train] Iter 0046 | Loss 60.765079 | Grad 0.4890 | KLWeight 0.0010
+[2022-04-07 12:53:22,242::train::INFO] [Train] Iter 0047 | Loss 60.810841 | Grad 0.8255 | KLWeight 0.0010
+[2022-04-07 12:53:22,322::train::INFO] [Train] Iter 0048 | Loss 60.847569 | Grad 0.6170 | KLWeight 0.0010
+[2022-04-07 12:53:22,400::train::INFO] [Train] Iter 0049 | Loss 60.813000 | Grad 0.8009 | KLWeight 0.0010
+[2022-04-07 12:53:22,479::train::INFO] [Train] Iter 0050 | Loss 60.861076 | Grad 0.4326 | KLWeight 0.0010
+[2022-04-07 12:53:22,556::train::INFO] [Train] Iter 0051 | Loss 60.860268 | Grad 0.6488 | KLWeight 0.0010
+[2022-04-07 12:53:22,634::train::INFO] [Train] Iter 0052 | Loss 60.813942 | Grad 0.9918 | KLWeight 0.0010
+[2022-04-07 12:53:22,727::train::INFO] [Train] Iter 0053 | Loss 60.768085 | Grad 0.5901 | KLWeight 0.0010
+[2022-04-07 12:53:22,818::train::INFO] [Train] Iter 0054 | Loss 60.852280 | Grad 0.7732 | KLWeight 0.0010
