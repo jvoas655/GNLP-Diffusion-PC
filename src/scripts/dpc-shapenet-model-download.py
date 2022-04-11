@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 import gdown
 
-from utilities.paths import DIFFUSION_MODEL_PRETRAINED_FOLDER
+from utilities.paths import PRETRAINED_FOLDER
 
 
 if __name__ == "__main__":
@@ -10,7 +10,7 @@ if __name__ == "__main__":
     argparser = ArgumentParser()
     argparser.add_argument('-o', '--output', type=str,
                            help='Folder path to put all the pretrained models.',
-                           default=str(DIFFUSION_MODEL_PRETRAINED_FOLDER))
+                           default=str(PRETRAINED_FOLDER))
     argparser.add_argument('-f', '--force', action='store_true', dest='force',
                            help='Overwrite anything that may exist in the current output path.')
     argparser.add_argument('-q', '--quiet', action='store_true', dest='quiet',

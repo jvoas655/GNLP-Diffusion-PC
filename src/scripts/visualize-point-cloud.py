@@ -9,7 +9,7 @@ import torch
 from diffusionpointcloud.models.autoencoder import *
 from diffusionpointcloud.models.vae_gaussian import *
 from diffusionpointcloud.models.vae_flow import *
-from utilities.paths import DIFFUSION_MODEL_DATA_FOLDER
+from utilities.paths import DATA_FOLDER
 
 
 def draw_pc(data, title, outfile=None):

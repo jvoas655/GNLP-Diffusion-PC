@@ -7,7 +7,7 @@ import os
 import json
 import numpy as np
 
-from utilities.paths import DIFFUSION_MODEL_DATA_FOLDER
+from utilities.paths import DATA_FOLDER
 
 synsetid_to_cate = {
     '02691156': 'airplane', '02773838': 'bag', '02801938': 'basket',
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     argparser = ArgumentParser()
     argparser.add_argument('-o', '--output', type=str,
                            help='Shapenet File location, default is (Diffusion Models Directory under data/)',
-                           default=str(DIFFUSION_MODEL_DATA_FOLDER))
+                           default=str(DATA_FOLDER))
 
     args = argparser.parse_args()
 
