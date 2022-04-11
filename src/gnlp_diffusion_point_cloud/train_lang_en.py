@@ -145,13 +145,13 @@ def train(it):
     writer.flush()
 
 def validate_loss(it):
-    return
+    return 0
     all_refs = []
     all_recons = []
     for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
         if args.num_val_batches > 0 and i >= args.num_val_batches:
             break
-        ref = batch['pointcloud'].to(args.device)
+        ref_tokens, ref_embeddings = batch['pointcloud'].to(args.device)
         shift = batch['shift'].to(args.device)
         scale = batch['scale'].to(args.device)
         with torch.no_grad():
@@ -174,7 +174,7 @@ def validate_loss(it):
     return cd
 
 def validate_inspect(it):
-    return;
+    return 0
     sum_n = 0
     sum_chamfer = 0
     for i, batch in enumerate(tqdm(val_loader, desc='Inspect')):
@@ -204,7 +204,6 @@ try:
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
             }
-            cd_loss = 0
             ckpt_mgr.save(model, args, cd_loss, opt_states, step=it)
         it += 1
 
