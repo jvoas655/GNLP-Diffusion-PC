@@ -75,7 +75,7 @@ class NLShapeNetCoreEmbeddings(Dataset):
                 self.embeddings = np.append(self.embeddings, cached_embeddings_file[synsetid][self.split][()], axis=0)
             else:
                 self.embeddings = cached_embeddings_file[synsetid][self.split][()]
-        task_prefix = "Create a pointcloud described as: "
+        task_prefix = "Create a object point clouds described as: "
         self.token_vectors = self.tokenizer([task_prefix + desc for desc in self.descriptions], padding = "max_length", max_length = self.token_length, truncation = True, return_tensors="pt").input_ids
         self.descriptions = np.array(self.descriptions)
         np.random.seed(2022)

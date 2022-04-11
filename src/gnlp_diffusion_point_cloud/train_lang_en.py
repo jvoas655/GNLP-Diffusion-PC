@@ -10,9 +10,12 @@ from utils.data import *
 from utils.transform import *
 from utils.dataset import *
 from models.language_encoder import *
+from diffusion_point_cloud.models.vae_flow import *
+from diffusion_point_cloud.models.vae_gaussian import *
+from evaluation.evaluation_metrics import EMD_CD
 
 from pathlib import Path
-from utilities.paths import DATA_FOLDER
+from utilities.paths import DATA_FOLDER, PRETRAINED_FOLDER
 
 
 # Arguments
@@ -20,17 +23,23 @@ parser = argparse.ArgumentParser()
 # Model arguments
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--model', type=str, default="T5", choices=["T5"])
+parser.add_argument('--loss', type=str, default="ContrastiveCos", choices=["MSE", "ContrastiveCos"])
 parser.add_argument('--num_steps', type=int, default=200)
 parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=256)
 parser.add_argument('--token_length', type=int, default=128)
+parser.add_argument('--contrastive_size', type=int, default=32)
 
 # Datasets and loaders
 parser.add_argument('--lang_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_text_data.hdf5")
 parser.add_argument('--emb_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_embeddings_data.hdf5")
-parser.add_argument('--categories', type=str_list, default=['table'])
+parser.add_argument('--categories', type=str_list, default=['chair'])
 parser.add_argument('--train_batch_size', type=int, default=64)
 parser.add_argument('--val_batch_size', type=int, default=32)
+parser.add_argument('--val_ckpt', type=str, default= PRETRAINED_FOLDER / "GEN_chair.pt")
+parser.add_argument('--val_model', type=str, default='flow', choices=['flow', 'gaussian'])
+parser.add_argument('--val_flexibility', type=float, default=0.0)
+parser.add_argument('--val_sample_num_points', type=int, default=2048)
 
 # Optimizer and scheduler
 parser.add_argument('--lr', type=float, default=1e-3)
@@ -77,6 +86,17 @@ else:
     model = LanguageEncoder(args).to(args.device)
 logger.info(repr(model))
 
+logger.info('Building validation model...')
+val_ckpt = torch.load(args.val_ckpt)
+if args.val_model == 'gaussian':
+    val_model = GaussianVAE(val_ckpt['args']).to(args.device)
+elif args.val_model == 'flow':
+    val_model = FlowVAE(val_ckpt['args']).to(args.device)
+val_model.load_state_dict(val_ckpt['state_dict'])
+logger.info(repr(val_model))
+#model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+#params = sum([np.prod(p.size()) for p in model_parameters])
+#rint(params)
 # Datasets and loaders
 transform = None
 logger.info('Loading datasets...')
@@ -122,6 +142,16 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
 def train(it):
     # Load data
     batch_tokens, batch_encodings = next(train_iter)
+    targets = None
+    if (args.loss == "ContrastiveCos"):
+        shuffle_size = min(int(batch_tokens.shape[0] / 2), args.contrastive_size)
+        rand_start = random.randint(0, batch_tokens.shape[0] - shuffle_size)
+        targets = np.ones(batch_tokens.shape[0])
+        inds = np.arange(shuffle_size)
+        rand_inds = np.random.shuffle(inds)
+        batch_tokens[rand_start:rand_start + shuffle_size] = batch_tokens[rand_start:rand_start + shuffle_size, :][rand_inds, :]
+        targets[rand_start:rand_start + shuffle_size] = np.where(inds != rand_inds, -1, 1)
+        targets = torch.Tensor(targets).to(args.device)
     x = batch_tokens.to(args.device)
     y = batch_encodings.to(args.device)
 
@@ -130,7 +160,7 @@ def train(it):
     model.train()
 
     # Forward
-    loss = model.get_loss(x, y)
+    loss = model.get_loss(x, y, targets)
 
     # Backward and optimize
     loss.backward()
@@ -145,25 +175,24 @@ def train(it):
     writer.flush()
 
 def validate_loss(it):
-    return 0
-    all_refs = []
-    all_recons = []
+    all_refscons = []
+    all_modcons = []
     for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
         if args.num_val_batches > 0 and i >= args.num_val_batches:
             break
-        ref_tokens, ref_embeddings = batch['pointcloud'].to(args.device)
-        shift = batch['shift'].to(args.device)
-        scale = batch['scale'].to(args.device)
+        ref_tokens, ref_embeddings = batch
+        ref_tokens=ref_tokens.to(args.device)
+        ref_embeddings=ref_embeddings.to(args.device)
         with torch.no_grad():
             model.eval()
-            code = model.encode(ref)
-            recons = model.decode(code, ref.size(1), flexibility=args.flexibility)
-        all_refs.append(ref * scale + shift)
-        all_recons.append(recons * scale + shift)
+            code = model.encode(ref_tokens)
+            val_model.eval()
+            all_refscons.append(val_model.sample(ref_embeddings, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
+            all_modcons.append(val_model.sample(code, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
 
-    all_refs = torch.cat(all_refs, dim=0)
-    all_recons = torch.cat(all_recons, dim=0)
-    metrics = EMD_CD(all_recons, all_refs, batch_size=args.val_batch_size)
+    all_refscons = torch.cat(all_refscons, dim=0)
+    all_modcons = torch.cat(all_modcons, dim=0)
+    metrics = EMD_CD(all_modcons, all_refscons, batch_size=args.val_batch_size)
     cd, emd = metrics['MMD-CD'].item(), metrics['MMD-EMD'].item()
 
     logger.info('[Val] Iter %04d | CD %.6f | EMD %.6f  ' % (it, cd, emd))
@@ -199,7 +228,7 @@ try:
         if it % args.val_freq == 0 or it == args.max_iters:
             with torch.no_grad():
                 cd_loss = validate_loss(it)
-                validate_inspect(it)
+                #validate_inspect(it)
             opt_states = {
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),

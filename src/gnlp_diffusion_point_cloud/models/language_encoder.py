@@ -18,11 +18,18 @@ class LanguageEncoder(nn.Module):
         if (args.model == "T5"):
             self.encoder = T5Encoder(args)
         self.tokenizer = self.encoder.tokenizer
+        if (args.loss == "MSE"):
+            self.loss = nn.MSELoss()
+        elif (args.loss == "ContrastiveCos"):
+            self.loss = nn.CosineEmbeddingLoss()
 
     def encode(self, x):
         return self.encoder(x)
 
-    def get_loss(self, x, y):
+    def get_loss(self, x, y, targets=None):
         code = self.encoder(x)
-        loss = nn.MSELoss()
-        return loss(code, y)
+        if (self.args.loss == "ContrastiveCos"):
+            loss = self.loss(code, y, targets)
+        else:
+            loss = self.loss(code, y)
+        return loss
