@@ -31,12 +31,8 @@ class PointNetEncoder(nn.Module):
         self.fc_bn2_v = nn.BatchNorm1d(128)
 
     def forward(self, x):
-        print(x.shape)
         x = x.transpose(1, 2)
-        print(x.shape)
-        x = self.conv1(x)
-        print(x.shape)
-        x = F.relu(self.bn1(x))
+        x = F.relu(self.bn1(self.conv1(x)))
         x = F.relu(self.bn2(self.conv2(x)))
         x = F.relu(self.bn3(self.conv3(x)))
         x = self.bn4(self.conv4(x))

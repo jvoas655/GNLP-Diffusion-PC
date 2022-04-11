@@ -5,12 +5,12 @@ import torch.utils.tensorboard
 from torch.nn.utils import clip_grad_norm_
 from tqdm.auto import tqdm
 
-from utils.dataset import *
-from utils.misc import *
-from utils.data import *
-from utils.transform import *
-from models.autoencoder import *
-from evaluation import EMD_CD
+from diffusion_point_cloud.utils.dataset import *
+from diffusion_point_cloud.utils.misc import *
+from diffusion_point_cloud.utils.data import *
+from diffusion_point_cloud.utils.transform import *
+from diffusion_point_cloud.models.autoencoder import *
+from diffusion_point_cloud.evaluation import EMD_CD
 from utilities.paths import DATA_FOLDER
 
 # Arguments
@@ -27,7 +27,7 @@ parser.add_argument('--resume', type=str, default=None)
 
 # Datasets and loaders
 parser.add_argument('--dataset_path', type=str, default=DATA_FOLDER / 'aligned_pc_data.hdf5')
-parser.add_argument('--categories', type=list, default=['table'])
+parser.add_argument('--categories', type=list, default=['table', "chair"])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
 parser.add_argument('--train_batch_size', type=int, default=64)
 parser.add_argument('--val_batch_size', type=int, default=32)
