@@ -35,7 +35,17 @@ cate_to_synsetid = {v: k for k, v in synsetid_to_cate.items()}
 
 class NLShapeNetCoreEmbeddings(Dataset):
 
-    def __init__(self, desc_path, embedding_path, tokenizer, token_length, cates, split, transform: Callable = None):
+    def __init__(
+            self,
+            desc_path,
+            embedding_path,
+            tokenizer,
+            token_length,
+            cates,
+            split,
+            transform: Callable = None,
+            size: int = -1,
+    ):
         super().__init__()
         assert isinstance(cates, list), '`cates` must be a list of cate names.'
         assert split in ('train', 'val', 'test')
@@ -50,6 +60,10 @@ class NLShapeNetCoreEmbeddings(Dataset):
         self.split = split
         self.transform = transform
         self.stats = None
+
+        # The size of the dataset, -1 means the entire dataset, if you want to run experiments on small sets for
+        # convergence testing etc. set this to a low value.
+        self.size = size
 
         self.descriptions = []
         self.embeddings = []
@@ -75,14 +89,27 @@ class NLShapeNetCoreEmbeddings(Dataset):
                 self.embeddings = np.append(self.embeddings, cached_embeddings_file[synsetid][self.split][()], axis=0)
             else:
                 self.embeddings = cached_embeddings_file[synsetid][self.split][()]
-        task_prefix = "Create a object point clouds described as: "
-        self.token_vectors = self.tokenizer([task_prefix + desc for desc in self.descriptions], padding = "max_length", max_length = self.token_length, truncation = True, return_tensors="pt").input_ids
+
+        self.token_vectors = self.tokenizer(self.descriptions)
         self.descriptions = np.array(self.descriptions)
+
+        # TODO - why is this here? This should be somewhere very clear at the top of a script, this will lead to
+        # bugs when you want to make something random but are confused on why it's getting the same results.
         np.random.seed(2022)
         shuffle_inds = np.random.shuffle(np.arange(self.descriptions.shape[0]))
-        self.token_vectors = np.squeeze(self.token_vectors.detach().numpy()[shuffle_inds, :], axis = 0)
-        self.descriptions = np.squeeze(self.descriptions[shuffle_inds], axis = 0)
-        self.embeddings = np.squeeze(self.embeddings[shuffle_inds, :], axis = 0)
+
+        self.token_vectors = np.squeeze(self.token_vectors.detach().numpy()[shuffle_inds, :], axis=0)
+        self.descriptions = np.squeeze(self.descriptions[shuffle_inds], axis=0)
+        self.embeddings = np.squeeze(self.embeddings[shuffle_inds, :], axis=0)
+
+        # Restrict the size of the dataset to the size parameter if it was supplied.
+        if self.size > 0:
+            # Max out the size of the dataset to whatever the actual size of the dataset is
+            # (i.e. you can't size a size of 1 million with a dataset of thousands)
+            self.token_vectors = self.token_vectors[0:min(len(self.token_vectors), self.size)]
+            self.descriptions = self.descriptions[0:min(len(self.descriptions), self.size)]
+            self.embeddings = self.embeddings[0:min(len(self.embeddings), self.size)]
+
     def __len__(self):
         return self.descriptions.shape[0]
 

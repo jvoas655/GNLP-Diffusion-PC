@@ -22,7 +22,8 @@ from utilities.paths import DATA_FOLDER, PRETRAINED_FOLDER
 parser = argparse.ArgumentParser()
 # Model arguments
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
-parser.add_argument('--model', type=str, default="T5", choices=["T5"])
+parser.add_argument('--backbone', type=str, default="T5", choices=["T5"])
+parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "Simple"])
 parser.add_argument('--loss', type=str, default="ContrastiveCos", choices=["MSE", "ContrastiveCos", "ContrastiveLoss"])
 parser.add_argument('--num_steps', type=int, default=200)
 parser.add_argument('--resume', type=str, default=None)
@@ -83,7 +84,8 @@ if args.resume is not None:
     model = LanguageEncoder(ckpt['args']).to(args.device)
     model.load_state_dict(ckpt['state_dict'])
 else:
-    model = LanguageEncoder(args).to(args.device)
+    model = LanguageEncoder(**vars(args)).to(args.device)
+
 logger.info(repr(model))
 
 logger.info('Building validation model...')
@@ -111,8 +113,8 @@ train_dset = NLShapeNetCoreEmbeddings(
     embedding_path=args.emb_dataset_path,
     cates=args.categories,
     split='train',
-    tokenizer=model.tokenizer,
-    token_length = args.token_length,
+    tokenizer=model.backbone.tokenizer,
+    token_length=args.token_length,
     transform=transform,
 )
 val_dset = NLShapeNetCoreEmbeddings(
@@ -120,8 +122,8 @@ val_dset = NLShapeNetCoreEmbeddings(
     embedding_path=args.emb_dataset_path,
     cates=args.categories,
     split='val',
-    tokenizer=model.tokenizer,
-    token_length = args.token_length,
+    tokenizer=model.backbone.tokenizer,
+    token_length=args.token_length,
     transform=transform,
 )
 train_iter = get_data_iterator(DataLoader(

@@ -16,7 +16,9 @@ class ContrastiveLoss(nn.Module):
 
     def __init__(
             self,
-            negative_temperature: float = 0.5
+            negative_temperature: float = 0.5,
+            *args,
+            **kwargs
     ):
         """
         :param negative_temperature: <float> A trade off hyperparameter between the weight of positive examples and negative
