@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser()
 # Model arguments
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--model', type=str, default="T5", choices=["T5"])
-parser.add_argument('--loss', type=str, default="ContrastiveCos", choices=["MSE", "ContrastiveCos"])
+parser.add_argument('--loss', type=str, default="ContrastiveCos", choices=["MSE", "ContrastiveCos", "ContrastiveLoss"])
 parser.add_argument('--num_steps', type=int, default=200)
 parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=256)
@@ -87,7 +87,13 @@ else:
 logger.info(repr(model))
 
 logger.info('Building validation model...')
-val_ckpt = torch.load(args.val_ckpt)
+
+# Helpful for people on devices without gpus for debugging
+if args.device == 'cpu':
+    val_ckpt = torch.load(args.val_ckpt, map_location=torch.device('cpu'))
+else:
+    val_ckpt = torch.load(args.val_ckpt)
+
 if args.val_model == 'gaussian':
     val_model = GaussianVAE(val_ckpt['args']).to(args.device)
 elif args.val_model == 'flow':
@@ -137,6 +143,7 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
     milestones=[args.sched_start_epoch for offset in range(0, args.sched_end_epoch - args.sched_start_epoch, steps)],
     gamma=(args.end_lr / args.lr) ** (1/10)
 )
+
 
 # Train, validate
 def train(it):

@@ -4,7 +4,8 @@ from typing import List
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from models.encoders.t5 import *
+from models.encoders.t5 import T5Encoder
+from models.losses.contrastive_loss import ContrastiveLoss
 from utils.dataset import NLShapeNetCoreEmbeddings
 
 
@@ -22,6 +23,8 @@ class LanguageEncoder(nn.Module):
             self.loss = nn.MSELoss()
         elif (args.loss == "ContrastiveCos"):
             self.loss = nn.CosineEmbeddingLoss()
+        elif args.loss == "ContrastiveLoss":
+            self.loss = ContrastiveLoss()
 
     def encode(self, x):
         return self.encoder(x)
