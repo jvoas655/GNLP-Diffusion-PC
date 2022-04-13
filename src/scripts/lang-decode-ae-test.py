@@ -3,33 +3,42 @@ import time
 import argparse
 import torch
 from tqdm.auto import tqdm
+from pathlib import Path
 
-from diffusionpointcloud.utils.dataset import *
-from diffusionpointcloud.utils.misc import *
-from diffusionpointcloud.utils.data import *
-from diffusionpointcloud.models.autoencoder import *
-from diffusionpointcloud.evaluation import EMD_CD
-from utilities.paths import DIFFUSION_MODEL_PRETRAINED_FOLDER, DIFFUSION_MODEL_RESULTS_FOLDER, DIFFUSION_MODEL_DATA_FOLDER
+from diffusion_point_cloud.utils.dataset import *
+from diffusion_point_cloud.utils.misc import *
+from diffusion_point_cloud.utils.data import *
+from diffusion_point_cloud.models.autoencoder import *
+from diffusion_point_cloud.evaluation import EMD_CD
+from utilities.paths import PRETRAINED_FOLDER, RESULTS_FOLDER, DIFFUSION_MODEL_FOLDER, DATA_FOLDER
 
 # TODO - make this selection of encoder an argument in the CLI
-from langencoders.encoders.t5 import T5Enconder
-
+from gnlp_diffusion_point_cloud.models.language_encoder import *
 
 
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--ckpt', type=str, default=str(DIFFUSION_MODEL_PRETRAINED_FOLDER / 'AE_all.pt'))
-parser.add_argument('--categories', type=str_list, default=['table'])
-parser.add_argument('--save_dir', type=str, default=str(DIFFUSION_MODEL_RESULTS_FOLDER))
+parser.add_argument('--ckpt', type=str, default=str(PRETRAINED_FOLDER / 'AE_all.pt'))
+parser.add_argument('--lang_ckpt', type=str, required=True, help='Path to your language model pt file.')
+parser.add_argument('--categories', type=str_list, default=['chair'])
+parser.add_argument('--save_dir', type=str, default=str(RESULTS_FOLDER))
 parser.add_argument('--device', '-d', type=str, default='cuda')
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default=str(DIFFUSION_MODEL_DATA_FOLDER / 'aligned_pc_data.hdf5'))
-parser.add_argument('--lang_dataset_path', type=str, default=str(DIFFUSION_MODEL_DATA_FOLDER / 'aligned_text_data.hdf5'))
+parser.add_argument('--dataset_path', type=str, default=str(DATA_FOLDER / 'aligned_pc_data.hdf5'))
+parser.add_argument('--lang_dataset_path', type=str, default=str(DATA_FOLDER / 'aligned_text_data.hdf5'))
+parser.add_argument('--emb_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_embeddings_data.hdf5")
+parser.add_argument('--token_length', type=int, default=128)
+parser.add_argument('--dataset_size', '-ds', type=int, default=-1,
+                    help='-1 means all dataset examples are used, anything higher will slice the dataset.')
 
-parser.add_argument('--batch_size', type=int, default=128)
+parser.add_argument('--batch_size', type=int, default=16)
 args = parser.parse_args()
 
-ckpt = DIFFUSION_MODEL_PRETRAINED_FOLDER / args.ckpt
+ckpt = PRETRAINED_FOLDER / args.ckpt
+
+lang_ckpt = torch.load(args.lang_ckpt)
+lang_model = LanguageEncoder(**vars(lang_ckpt['args'])).to(args.device)
+lang_model.load_state_dict(lang_ckpt['state_dict'])
 
 # Checkpoint
 if torch.cuda.is_available():
@@ -39,12 +48,15 @@ else:
 seed_all(ckpt['args'].seed)
 
 # Datasets and loaders
-dataset = ShapeNetCore(
-    path=args.dataset_path,
-    lang_path=args.lang_dataset_path,
+dataset = NLShapeNetCoreEmbeddings(
+    desc_path=args.lang_dataset_path,
+    embedding_path=args.emb_dataset_path,
     cates=args.categories,
     split='train',
-    scale_mode=ckpt['args'].scale_mode
+    tokenizer=lang_model.backbone.tokenizer,
+    token_length=args.token_length,
+    transform=None,
+    size=args.dataset_size,
 )
 dataloader = DataLoader(dataset, batch_size=args.batch_size, num_workers=0)
 
@@ -52,41 +64,28 @@ dataloader = DataLoader(dataset, batch_size=args.batch_size, num_workers=0)
 model = AutoEncoder(ckpt['args']).to(args.device)
 model.load_state_dict(ckpt['state_dict'])
 
-lang_model = T5Enconder()
-lang_model.load_state_dict(torch.load(DIFFUSION_MODEL_PRETRAINED_FOLDER / 'language_test.pt'))
-lang_model.to(args.device)
-
-all_ref = []
 all_recons = []
 all_lang_recons = []
 
 for i, batch in enumerate(tqdm(dataloader)):
-    ref = batch['pointcloud'].to(args.device)
-    shift = batch['shift'].to(args.device)
-    scale = batch['scale'].to(args.device)
-    descriptions = batch['description']
+    tokens, embeddings = batch
+    tokens = tokens.to(args.device)
+    embeddings = embeddings.to(args.device)
     model.eval()
     with torch.no_grad():
-        code = model.encode(ref)
-        lang_code = lang_model.encode(descriptions)
-        recons = model.decode(code, ref.size(1), flexibility=ckpt['args'].flexibility).detach()
-        lang_recons = model.decode(lang_code, ref.size(1), flexibility=ckpt['args'].flexibility).detach()
+        lang_code = lang_model.encode(tokens.to(args.device))
+        recons = model.decode(embeddings, 2048, flexibility=ckpt['args'].flexibility).detach()
+        lang_recons = model.decode(lang_code, 2048, flexibility=ckpt['args'].flexibility).detach()
 
-    ref = ref * scale + shift
-    recons = recons * scale + shift
-    lang_recons = lang_recons * scale + shift
-
-    all_ref.append(ref.detach().cpu())
     all_recons.append(recons.detach().cpu())
     all_lang_recons.append(lang_recons.detach().cpu())
 
-    break
+    if i == 32:
+      break
 
-all_ref = torch.cat(all_ref, dim=0)
 all_recons = torch.cat(all_recons, dim=0)
 all_lang_recons = torch.cat(all_lang_recons, dim=0)
 
-np.save(os.path.join(args.save_dir, 'ref.npy'), all_ref.numpy())
 np.save(os.path.join(args.save_dir, 'out.npy'), all_recons.numpy())
 np.save(os.path.join(args.save_dir, 'lang_out.npy'), all_lang_recons.numpy())
 

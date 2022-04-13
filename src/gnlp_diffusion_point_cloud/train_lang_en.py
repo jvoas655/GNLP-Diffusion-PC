@@ -214,8 +214,12 @@ def validate_loss(it):
             model.eval()
             code = model.encode(ref_tokens)
             val_model.eval()
-            all_refscons.append(val_model.sample(ref_embeddings, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
-            all_modcons.append(val_model.sample(code, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
+            if args.val_model == 'AE':
+              all_refscons.append(val_model.decode(ref_embeddings, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
+              all_modcons.append(val_model.decode(code, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
+            else:
+              all_refscons.append(val_model.sample(ref_embeddings, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
+              all_modcons.append(val_model.sample(code, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
 
     all_refscons = torch.cat(all_refscons, dim=0)
     all_modcons = torch.cat(all_modcons, dim=0)

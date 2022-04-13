@@ -14,7 +14,7 @@ from utilities.paths import PRETRAINED_FOLDER, DATA_FOLDER
 
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--ckpt', type=str, default=str(PRETRAINED_FOLDER / 'AE_all.pt'))
+parser.add_argument('--ckpt', type=str, default=str(PRETRAINED_FOLDER / 'GEN_chair.pt'))
 parser.add_argument('--save_path', type=str, default=str(DATA_FOLDER / "aligned_embeddings_data.hdf5"))
 parser.add_argument('--device', '-d', type=str, default='cuda')
 # Datasets and loaders
@@ -55,6 +55,9 @@ for cate in input_file.keys():
                 if isinstance(embeddings, np.ndarray):
                     embeddings = np.append(embeddings, model.encode(ref).cpu().detach().numpy(), axis = 0)
                 else:
-                    embeddings = model.encode(ref).cpu().detach().numpy()
+                    if 'GEN' in args.ckpt:
+                        embeddings = model.encode(ref).cpu().detach().numpy()
+                    else:
+                        embeddings = model.encode(ref).cpu().detach().numpy()
         if isinstance(embeddings, np.ndarray):
             output_file[cate].create_dataset(split, data=embeddings)
