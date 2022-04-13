@@ -30,6 +30,10 @@ parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=256)
 parser.add_argument('--token_length', type=int, default=128)
 parser.add_argument('--contrastive_size', type=int, default=32)
+parser.add_argument('--dataset_size', '-ds', type=int, default=-1,
+                    help='-1 means all dataset examples are used, anything higher will slice the dataset.')
+parser.add_argument('--use_train_as_validation', action='store_true', dest='use_train_as_validation',
+                    help='Use the training dataloader as the validation dataset, useful for debugging.')
 
 # Datasets and loaders
 parser.add_argument('--lang_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_text_data.hdf5")
@@ -116,6 +120,7 @@ train_dset = NLShapeNetCoreEmbeddings(
     tokenizer=model.backbone.tokenizer,
     token_length=args.token_length,
     transform=transform,
+    size=args.dataset_size,
 )
 val_dset = NLShapeNetCoreEmbeddings(
     desc_path=args.lang_dataset_path,
@@ -125,13 +130,22 @@ val_dset = NLShapeNetCoreEmbeddings(
     tokenizer=model.backbone.tokenizer,
     token_length=args.token_length,
     transform=transform,
+    size=args.dataset_size,
 )
 train_iter = get_data_iterator(DataLoader(
     train_dset,
     batch_size=args.train_batch_size,
     num_workers=0,
 ))
-val_loader = DataLoader(val_dset, batch_size=args.val_batch_size, num_workers=0)
+
+if args.use_train_as_validation:
+    val_loader = DataLoader(
+    train_dset,
+    batch_size=args.train_batch_size,
+    num_workers=0,
+)
+else:
+    val_loader = DataLoader(val_dset, batch_size=args.val_batch_size, num_workers=0)
 
 
 # Optimizer and scheduler
