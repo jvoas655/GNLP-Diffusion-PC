@@ -16,7 +16,7 @@ from utilities.paths import PRETRAINED_FOLDER, DATA_FOLDER
 parser = argparse.ArgumentParser()
 parser.add_argument('--ckpt', type=str, default=str(PRETRAINED_FOLDER / 'AE_all.pt'))
 parser.add_argument('--save_path', type=str, default=str(DATA_FOLDER / "aligned_embeddings_data.hdf5"))
-parser.add_argument('--device', '-d', type=str, default='cpu')
+parser.add_argument('--device', '-d', type=str, default='cuda')
 # Datasets and loaders
 parser.add_argument('--dataset_path', type=str, default=str(DATA_FOLDER / 'aligned_pc_data.hdf5'))
 parser.add_argument('--batch_size', type=int, default=128)
