@@ -12,6 +12,7 @@ from utils.dataset import *
 from models.language_encoder import *
 from diffusion_point_cloud.models.vae_flow import *
 from diffusion_point_cloud.models.vae_gaussian import *
+from diffusion_point_cloud.models.autoencoder import *
 from evaluation.evaluation_metrics import EMD_CD
 
 from pathlib import Path
@@ -23,7 +24,7 @@ parser = argparse.ArgumentParser()
 # Model arguments
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--backbone', type=str, default="T5", choices=["T5"])
-parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "Simple"])
+parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
 parser.add_argument('--loss', type=str, default="ContrastiveCos", choices=["MSE", "ContrastiveCos", "ContrastiveLoss"])
 parser.add_argument('--num_steps', type=int, default=200)
 parser.add_argument('--resume', type=str, default=None)
@@ -42,7 +43,7 @@ parser.add_argument('--categories', type=str_list, default=['chair'])
 parser.add_argument('--train_batch_size', type=int, default=64)
 parser.add_argument('--val_batch_size', type=int, default=32)
 parser.add_argument('--val_ckpt', type=str, default= PRETRAINED_FOLDER / "GEN_chair.pt")
-parser.add_argument('--val_model', type=str, default='flow', choices=['flow', 'gaussian'])
+parser.add_argument('--val_model', type=str, default='flow', choices=['flow', 'gaussian', 'AE'])
 parser.add_argument('--val_flexibility', type=float, default=0.0)
 parser.add_argument('--val_sample_num_points', type=int, default=2048)
 
@@ -104,6 +105,9 @@ if args.val_model == 'gaussian':
     val_model = GaussianVAE(val_ckpt['args']).to(args.device)
 elif args.val_model == 'flow':
     val_model = FlowVAE(val_ckpt['args']).to(args.device)
+elif args.val_model == 'AE':
+    val_model = AutoEncoder(val_ckpt['args']).to(args.device)
+
 val_model.load_state_dict(val_ckpt['state_dict'])
 logger.info(repr(val_model))
 #model_parameters = filter(lambda p: p.requires_grad, model.parameters())
@@ -183,7 +187,7 @@ def train(it):
     model.train()
 
     # Forward
-    loss = model.get_loss(x, y, targets)
+    loss = model.get_loss(x, y, targets=targets)
 
     # Backward and optimize
     loss.backward()

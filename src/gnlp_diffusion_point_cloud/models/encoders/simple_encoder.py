@@ -24,7 +24,7 @@ class SimpleEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor):
         batch_size = x.shape[0]
-        x = x.view(batch_size, -1)
+        x = x.view(batch_size, 1, -1)
         x = self.conv(x)
         x = F.avg_pool1d(x, 1)
         x = F.max_pool1d(x, x.shape[-1]).squeeze(-1)

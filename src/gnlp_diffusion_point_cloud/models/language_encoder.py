@@ -50,24 +50,24 @@ class LanguageEncoder(nn.Module):
 
     def __init__(
             self,
-            backbone_type: str = "T5",
-            encoder_type: str = "CNN2FF",
-            loss_type: str = "MSE",
+            backbone: str = "T5",
+            encoder: str = "CNN2FF",
+            loss: str = "MSE",
             *args,
             **kwargs
     ):
         super().__init__()
-        self.backbone_type = backbone_type
-        self.encoder_type = encoder_type
-        self.loss_type = loss_type
+        self.backbone_type = backbone
+        self.encoder_type = encoder
+        self.loss_type = loss
 
-        self.backbone = __back_bones__[backbone_type](*args, **kwargs)
-        self.encoder = __encoders__[encoder_type](*args, **kwargs)
+        self.backbone = __back_bones__[self.backbone_type](*args, **kwargs)
+        self.encoder = __encoders__[self.encoder_type](*args, **kwargs)
 
-        if loss_type == 'ContrastiveLoss':
-            self.loss = __losses__[loss_type](*args, **kwargs)
+        if self.loss_type == 'ContrastiveLoss':
+            self.loss = __losses__[self.loss_type](*args, **kwargs)
         else:
-            self.loss = __losses__[loss_type]()
+            self.loss = __losses__[self.loss_type]()
 
     def encode(self, x):
         return self.encoder(self.backbone(x))

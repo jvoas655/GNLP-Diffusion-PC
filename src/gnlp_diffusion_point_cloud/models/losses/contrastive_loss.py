@@ -31,8 +31,6 @@ class ContrastiveLoss(nn.Module):
         self.__negative_weight__ = 1 - self.negative_temperature if self.negative_temperature < 1 else 0.001
         self.__positive_weight__ = self.negative_temperature if self.negative_temperature > 0 else 0.001
 
-        self.simularity = nn.CosineSimilarity(dim=0)
-
     def forward(self, embeddings: torch.Tensor, targets: torch.Tensor):
         assert embeddings.shape[0] == targets.shape[0]
 
