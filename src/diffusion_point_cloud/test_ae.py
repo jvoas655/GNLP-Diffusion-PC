@@ -4,21 +4,22 @@ import argparse
 import torch
 from tqdm.auto import tqdm
 
-from utils.dataset import *
-from utils.misc import *
-from utils.data import *
-from models.autoencoder import *
-from evaluation import EMD_CD
+from diffusion_point_cloud.utils.dataset import *
+from diffusion_point_cloud.utils.misc import *
+from diffusion_point_cloud.utils.data import *
+from diffusion_point_cloud.models.autoencoder import *
+from diffusion_point_cloud.evaluation import EMD_CD
+from utilities.paths import DATA_FOLDER
 
 
 # Arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--ckpt', type=str, default='./pretrained/AE_airplane.pt')
-parser.add_argument('--categories', type=str_list, default=['table'])
+parser.add_argument('--categories', type=str_list, default=['table', "chair"])
 parser.add_argument('--save_dir', type=str, default='./results')
 parser.add_argument('--device', type=str, default='cuda')
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default='./data/aligned_pc_data.hdf5')
+parser.add_argument('--dataset_path', type=str, default=DATA_FOLDER / 'aligned_pc_data.hdf5')
 parser.add_argument('--batch_size', type=int, default=64)
 args = parser.parse_args()
 
