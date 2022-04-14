@@ -42,6 +42,7 @@ class NLShapeNetCoreEmbeddings(Dataset):
             pc_path,
             tokenizer,
             token_length,
+            scale_mode,
             cates,
             split,
             transform: Callable = None,
@@ -50,6 +51,8 @@ class NLShapeNetCoreEmbeddings(Dataset):
         super().__init__()
         assert isinstance(cates, list), '`cates` must be a list of cate names.'
         assert split in ('train', 'val', 'test')
+        assert scale_mode is None or scale_mode in ('global_unit', 'shape_unit', 'shape_bbox', 'shape_half', 'shape_34')
+        self.scale_mode = scale_mode
         self.token_length = token_length
         self.desc_path = desc_path
         self.embedding_path = embedding_path
@@ -97,6 +100,28 @@ class NLShapeNetCoreEmbeddings(Dataset):
                 self.pcs = np.append(self.pcs, pc_file[synsetid][self.split][()], axis=0)
             else:
                 self.pcs = pc_file[synsetid][self.split][()]
+        for j, pc in enumerate(torch.Tensor(self.pcs)):
+            if self.scale_mode == 'global_unit':
+                shift = pc.mean(dim=0).reshape(1, 3)
+                scale = self.stats['std'].reshape(1, 1)
+            elif self.scale_mode == 'shape_unit':
+                shift = pc.mean(dim=0).reshape(1, 3)
+                scale = pc.flatten().std().reshape(1, 1)
+            elif self.scale_mode == 'shape_half':
+                shift = pc.mean(dim=0).reshape(1, 3)
+                scale = pc.flatten().std().reshape(1, 1) / (0.5)
+            elif self.scale_mode == 'shape_34':
+                shift = pc.mean(dim=0).reshape(1, 3)
+                scale = pc.flatten().std().reshape(1, 1) / (0.75)
+            elif self.scale_mode == 'shape_bbox':
+                pc_max, _ = pc.max(dim=0, keepdim=True) # (1, 3)
+                pc_min, _ = pc.min(dim=0, keepdim=True) # (1, 3)
+                shift = ((pc_min + pc_max) / 2).view(1, 3)
+                scale = (pc_max - pc_min).max().reshape(1, 1) / 2
+            else:
+                shift = torch.zeros([1, 3])
+                scale = torch.ones([1, 1])
+            self.pcs[j, :, :] = ((pc - shift) / scale).numpy()
 
         self.token_vectors = self.tokenizer(self.descriptions)
         self.descriptions = np.array(self.descriptions)

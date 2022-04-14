@@ -41,7 +41,7 @@ parser.add_argument('--emb_dataset_path', type=str, default=Path(DATA_FOLDER) / 
 parser.add_argument('--pc_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_pc_data.hdf5")
 parser.add_argument('--categories', type=str_list, default=['chair'])
 parser.add_argument('--train_batch_size', type=int, default=64)
-parser.add_argument('--val_batch_size', type=int, default=32)
+parser.add_argument('--val_batch_size', type=int, default=64)
 parser.add_argument('--gen_ckpt', type=str, default= PRETRAINED_FOLDER / "GEN_chair.pt")
 parser.add_argument('--gen_model', type=str, default='flow', choices=['flow', 'gaussian'])
 parser.add_argument('--gen_flexibility', type=float, default=0.0)
@@ -51,7 +51,8 @@ parser.add_argument('--beta_1', type=float, default=1e-4)
 parser.add_argument('--beta_T', type=float, default=0.05)
 parser.add_argument('--sched_mode', type=str, default='linear')
 parser.add_argument('--residual', type=eval, default=True, choices=[True, False])
-parser.add_argument('--backbone_freeze', type=eval, default=True, choices=[True, False])
+parser.add_argument('--backbone_freeze', type=eval, default=False, choices=[True, False])
+parser.add_argument('--scale_mode', type=str, default='shape_unit')
 
 # Optimizer and scheduler
 parser.add_argument('--lr', type=float, default=1e-3)
@@ -68,7 +69,7 @@ parser.add_argument('--log_root', type=str, default='./logs_ae')
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--max_iters', type=int, default=float('inf'))
 parser.add_argument('--val_freq', type=float, default=1000)
-parser.add_argument('--val_type', type=str, default='CDTruePC', choices=['CDEmbeddings', 'CDTruePC'])
+parser.add_argument('--val_type', type=str, default='CDEmbeddings', choices=['CDEmbeddings', 'CDTruePC'])
 parser.add_argument('--tag', type=str, default=None)
 parser.add_argument('--num_val_batches', type=int, default=-1)
 parser.add_argument('--num_inspect_batches', type=int, default=1)
@@ -93,7 +94,7 @@ logger.info('Building model...')
 if args.resume is not None:
     logger.info('Resuming from checkpoint...')
     ckpt = torch.load(args.resume)
-    model = LanguageEncoder(ckpt['args']).to(args.device)
+    model = LanguageEncoder(**vars(ckpt['args'])).to(args.device)
     model.load_state_dict(ckpt['state_dict'])
 else:
     model = LanguageEncoder(**vars(args)).to(args.device)
@@ -129,6 +130,7 @@ train_dset = NLShapeNetCoreEmbeddings(
     split='train',
     tokenizer=model.backbone.tokenizer,
     token_length=args.token_length,
+    scale_mode=args.scale_mode,
     transform=transform,
     size=args.dataset_size,
 )
@@ -140,6 +142,7 @@ val_dset = NLShapeNetCoreEmbeddings(
     split='val',
     tokenizer=model.backbone.tokenizer,
     token_length=args.token_length,
+    scale_mode=args.scale_mode,
     transform=transform,
     size=args.dataset_size,
 )
@@ -215,6 +218,7 @@ def train(it):
 
 def validate_loss(it):
     all_refscons = []
+    all_embcons = []
     all_modcons = []
     for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
         if args.num_val_batches > 0 and i >= args.num_val_batches:
@@ -222,39 +226,47 @@ def validate_loss(it):
         ref_tokens, ref_embeddings, ref_pc = batch
         ref_tokens=ref_tokens.to(args.device)
         ref_embeddings=ref_embeddings.to(args.device)
+        ref_pc=ref_pc.to(args.device)
         with torch.no_grad():
             model.eval()
             code = model.encode(ref_tokens)
             gen_model.eval()
-            if (args.val_type == "CDEmbeddings"):
-                all_refscons.append(gen_model.sample(ref_embeddings, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach().cpu())
-            elif (args.val_type == "CDTruePC"):
-                all_refscons.append(ref_pc)
-            all_modcons.append(gen_model.sample(code, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach().cpu())
+            seed = torch.seed()
+            #if (args.val_type == "CDEmbeddings"):
+            all_embcons.append(gen_model.sample(ref_embeddings, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
+            torch.manual_seed(seed)
+            #elif (args.val_type == "CDTruePC"):
+            all_modcons.append(gen_model.sample(code, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
+            all_refscons.append(ref_pc)
 
     all_refscons = torch.cat(all_refscons, dim=0)
     all_modcons = torch.cat(all_modcons, dim=0)
-    metrics = EMD_CD(all_modcons, all_refscons, batch_size=args.val_batch_size)
-    cd, emd = metrics['MMD-CD'].item(), metrics['MMD-EMD'].item()
+    all_embcons = torch.cat(all_embcons, dim=0)
+    mod_metrics = EMD_CD(all_modcons, all_refscons, batch_size=args.val_batch_size)
+    mod_cd, mod_emd = mod_metrics['MMD-CD'].item(), mod_metrics['MMD-EMD'].item()
+    emb_metrics = EMD_CD(all_embcons, all_refscons, batch_size=args.val_batch_size)
+    emb_cd, emb_emd = emb_metrics['MMD-CD'].item(), emb_metrics['MMD-EMD'].item()
 
-    logger.info('[Val] Iter %04d | CD %.6f | EMD %.6f  ' % (it, cd, emd))
-    writer.add_scalar('val/cd', cd, it)
-    writer.add_scalar('val/emd', emd, it)
+    logger.info('[Val] Iter %04d | MOD_CD %.6f | EMB_CD %.6f  ' % (it, mod_cd, emb_cd))
+    writer.add_scalar('val/mod_cd', mod_cd, it)
+    writer.add_scalar('val/emb_cd', emb_cd, it)
     writer.flush()
 
-    return cd
+    return mod_cd
 
 def validate_inspect(it):
-    return 0
     sum_n = 0
     sum_chamfer = 0
     for i, batch in enumerate(tqdm(val_loader, desc='Inspect')):
-        x = batch['pointcloud'].to(args.device)
+        ref_tokens, ref_embeddings, ref_pc = batch
+        ref_tokens = ref_tokens.to(args.device)
+        ref_embeddings = ref_embeddings.to(args.device)
+        ref_pc = ref_pc.to(args.device)
         model.eval()
-        code = model.encode(x)
-        recons = model.decode(code, x.size(1), flexibility=args.flexibility).detach()
+        code = model.encode(ref_tokens)
+        recons = gen_model.sample(code, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach().cpu()
 
-        sum_n += x.size(0)
+        sum_n += ref_tokens.size(0)
         if i >= args.num_inspect_batches:
             break   # Inspect only 5 batch
 
@@ -270,7 +282,7 @@ try:
         if it % args.val_freq == 0 or it == args.max_iters:
             with torch.no_grad():
                 cd_loss = validate_loss(it)
-                #validate_inspect(it)
+                validate_inspect(it)
             opt_states = {
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
