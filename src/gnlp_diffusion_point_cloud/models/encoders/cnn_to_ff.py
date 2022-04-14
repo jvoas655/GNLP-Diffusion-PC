@@ -25,6 +25,7 @@ class CNNToFF(nn.Module):
         self.c_bn2_m = nn.BatchNorm1d(256)
         self.c_bn3_m = nn.BatchNorm1d(512)
         self.c_bn4_m = nn.BatchNorm1d(1024)
+        self.avg_pool_m = nn.AvgPool2d((512, 1))
 
         self.fc1_m = nn.Linear(1024, 512)
         self.fc2_m = nn.Linear(512, 256)
@@ -38,7 +39,8 @@ class CNNToFF(nn.Module):
         x = F.relu(self.c_bn2_m(self.c2_m(x)))
         x = F.relu(self.c_bn3_m(self.c3_m(x)))
         x = F.relu(self.c_bn4_m(self.c4_m(x)))
-        x = torch.max(x, 2, keepdim=True)[0]
+        x = x.transpose(2, 1)
+        x = self.avg_pool_m(x)
         x = x.view(-1, 1024)
         x = F.relu(self.fc_bn1_m(self.fc1_m(x)))
         x = F.relu(self.fc_bn2_m(self.fc2_m(x)))
