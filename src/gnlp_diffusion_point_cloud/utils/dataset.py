@@ -39,6 +39,7 @@ class NLShapeNetCoreEmbeddings(Dataset):
             self,
             desc_path,
             embedding_path,
+            pc_path,
             tokenizer,
             token_length,
             cates,
@@ -52,6 +53,7 @@ class NLShapeNetCoreEmbeddings(Dataset):
         self.token_length = token_length
         self.desc_path = desc_path
         self.embedding_path = embedding_path
+        self.pc_path = pc_path
         self.tokenizer = tokenizer
         if 'all' in cates:
             cates = cate_to_synsetid.keys()
@@ -80,8 +82,10 @@ class NLShapeNetCoreEmbeddings(Dataset):
     def load(self):
         text_data_file = h5py.File(self.desc_path)
         cached_embeddings_file = h5py.File(self.embedding_path)
+        pc_file = h5py.File(self.pc_path)
         encoding = 'utf-8'
         self.embeddings = None
+        self.pcs = None
         for synsetid in self.cate_synsetids:
             for j, desc in enumerate(text_data_file[synsetid][self.split]):
                 self.descriptions.append(desc.decode(encoding))
@@ -89,6 +93,10 @@ class NLShapeNetCoreEmbeddings(Dataset):
                 self.embeddings = np.append(self.embeddings, cached_embeddings_file[synsetid][self.split][()], axis=0)
             else:
                 self.embeddings = cached_embeddings_file[synsetid][self.split][()]
+            if (isinstance(self.pcs, np.ndarray)):
+                self.pcs = np.append(self.pcs, pc_file[synsetid][self.split][()], axis=0)
+            else:
+                self.pcs = pc_file[synsetid][self.split][()]
 
         self.token_vectors = self.tokenizer(self.descriptions)
         self.descriptions = np.array(self.descriptions)
@@ -101,6 +109,7 @@ class NLShapeNetCoreEmbeddings(Dataset):
         self.token_vectors = np.squeeze(self.token_vectors.detach().numpy()[shuffle_inds, :], axis=0)
         self.descriptions = np.squeeze(self.descriptions[shuffle_inds], axis=0)
         self.embeddings = np.squeeze(self.embeddings[shuffle_inds, :], axis=0)
+        self.pcs = np.squeeze(self.pcs[shuffle_inds, :, :], axis=0)
 
         # Restrict the size of the dataset to the size parameter if it was supplied.
         if self.size > 0:
@@ -109,12 +118,13 @@ class NLShapeNetCoreEmbeddings(Dataset):
             self.token_vectors = self.token_vectors[0:min(len(self.token_vectors), self.size)]
             self.descriptions = self.descriptions[0:min(len(self.descriptions), self.size)]
             self.embeddings = self.embeddings[0:min(len(self.embeddings), self.size)]
+            self.pcs = self.pcs[0:min(len(self.pcs), self.size)]
 
     def __len__(self):
         return self.descriptions.shape[0]
 
     def __getitem__(self, idx):
-        return self.token_vectors[idx, :], self.embeddings[idx, :]
+        return self.token_vectors[idx, :], self.embeddings[idx, :], self.pcs[idx, :, :]
 
 class NLShapeNetCoreJoint(Dataset):
     pass # Will be a join contrastive learning algo

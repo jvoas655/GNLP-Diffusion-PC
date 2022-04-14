@@ -25,8 +25,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--backbone', type=str, default="T5", choices=["T5"])
 parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
-parser.add_argument('--loss', type=str, default="ContrastiveCos", choices=["MSE", "ContrastiveCos", "ContrastiveLoss"])
-parser.add_argument('--num_steps', type=int, default=200)
+parser.add_argument('--loss', type=str, default="DiffusionMSE", choices=["MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE"])
 parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=256)
 parser.add_argument('--token_length', type=int, default=128)
@@ -39,13 +38,20 @@ parser.add_argument('--use_train_as_validation', action='store_true', dest='use_
 # Datasets and loaders
 parser.add_argument('--lang_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_text_data.hdf5")
 parser.add_argument('--emb_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_embeddings_data.hdf5")
+parser.add_argument('--pc_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_pc_data.hdf5")
 parser.add_argument('--categories', type=str_list, default=['chair'])
 parser.add_argument('--train_batch_size', type=int, default=64)
 parser.add_argument('--val_batch_size', type=int, default=32)
-parser.add_argument('--val_ckpt', type=str, default= PRETRAINED_FOLDER / "GEN_chair.pt")
-parser.add_argument('--val_model', type=str, default='flow', choices=['flow', 'gaussian', 'AE'])
-parser.add_argument('--val_flexibility', type=float, default=0.0)
-parser.add_argument('--val_sample_num_points', type=int, default=2048)
+parser.add_argument('--gen_ckpt', type=str, default= PRETRAINED_FOLDER / "GEN_chair.pt")
+parser.add_argument('--gen_model', type=str, default='flow', choices=['flow', 'gaussian'])
+parser.add_argument('--gen_flexibility', type=float, default=0.0)
+parser.add_argument('--gen_sample_num_points', type=int, default=2048)
+parser.add_argument('--num_steps', type=int, default=200)
+parser.add_argument('--beta_1', type=float, default=1e-4)
+parser.add_argument('--beta_T', type=float, default=0.05)
+parser.add_argument('--sched_mode', type=str, default='linear')
+parser.add_argument('--residual', type=eval, default=True, choices=[True, False])
+parser.add_argument('--backbone_freeze', type=eval, default=True, choices=[True, False])
 
 # Optimizer and scheduler
 parser.add_argument('--lr', type=float, default=1e-3)
@@ -62,6 +68,7 @@ parser.add_argument('--log_root', type=str, default='./logs_ae')
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--max_iters', type=int, default=float('inf'))
 parser.add_argument('--val_freq', type=float, default=1000)
+parser.add_argument('--val_type', type=str, default='CDTruePC', choices=['CDEmbeddings', 'CDTruePC'])
 parser.add_argument('--tag', type=str, default=None)
 parser.add_argument('--num_val_batches', type=int, default=-1)
 parser.add_argument('--num_inspect_batches', type=int, default=1)
@@ -97,19 +104,17 @@ logger.info('Building validation model...')
 
 # Helpful for people on devices without gpus for debugging
 if args.device == 'cpu':
-    val_ckpt = torch.load(args.val_ckpt, map_location=torch.device('cpu'))
+    gen_ckpt = torch.load(args.gen_ckpt, map_location=torch.device('cpu'))
 else:
-    val_ckpt = torch.load(args.val_ckpt)
+    gen_ckpt = torch.load(args.gen_ckpt)
 
-if args.val_model == 'gaussian':
-    val_model = GaussianVAE(val_ckpt['args']).to(args.device)
-elif args.val_model == 'flow':
-    val_model = FlowVAE(val_ckpt['args']).to(args.device)
-elif args.val_model == 'AE':
-    val_model = AutoEncoder(val_ckpt['args']).to(args.device)
+if args.gen_model == 'gaussian':
+    gen_model = GaussianVAE(gen_ckpt['args']).to(args.device)
+elif args.gen_model == 'flow':
+    gen_model = FlowVAE(gen_ckpt['args']).to(args.device)
 
-val_model.load_state_dict(val_ckpt['state_dict'])
-logger.info(repr(val_model))
+gen_model.load_state_dict(gen_ckpt['state_dict'])
+logger.info(repr(gen_model))
 #model_parameters = filter(lambda p: p.requires_grad, model.parameters())
 #params = sum([np.prod(p.size()) for p in model_parameters])
 #rint(params)
@@ -119,6 +124,7 @@ logger.info('Loading datasets...')
 train_dset = NLShapeNetCoreEmbeddings(
     desc_path=args.lang_dataset_path,
     embedding_path=args.emb_dataset_path,
+    pc_path=args.pc_dataset_path,
     cates=args.categories,
     split='train',
     tokenizer=model.backbone.tokenizer,
@@ -129,6 +135,7 @@ train_dset = NLShapeNetCoreEmbeddings(
 val_dset = NLShapeNetCoreEmbeddings(
     desc_path=args.lang_dataset_path,
     embedding_path=args.emb_dataset_path,
+    pc_path=args.pc_dataset_path,
     cates=args.categories,
     split='val',
     tokenizer=model.backbone.tokenizer,
@@ -168,8 +175,7 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
 # Train, validate
 def train(it):
     # Load data
-    batch_tokens, batch_encodings = next(train_iter)
-    targets = None
+    batch_tokens, batch_encodings, batch_pcs = next(train_iter)
     if (args.loss == "ContrastiveCos"):
         shuffle_size = min(int(batch_tokens.shape[0] / 2), args.contrastive_size)
         rand_start = random.randint(0, batch_tokens.shape[0] - shuffle_size)
@@ -181,13 +187,19 @@ def train(it):
         targets = torch.Tensor(targets).to(args.device)
     x = batch_tokens.to(args.device)
     y = batch_encodings.to(args.device)
+    batch_pcs = batch_pcs.to(args.device)
 
     # Reset grad and model state
     optimizer.zero_grad()
     model.train()
 
     # Forward
-    loss = model.get_loss(x, y, targets=targets)
+    if (args.loss == "DiffusionMSE"):
+        loss = model.get_loss(x, y, pcs = batch_pcs)
+    elif args.loss == "ContrastiveCos":
+        loss = model.get_loss(x, y, targets=targets)
+    else:
+        loss = model.get_loss(x, y)
 
     # Backward and optimize
     loss.backward()
@@ -207,19 +219,18 @@ def validate_loss(it):
     for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
         if args.num_val_batches > 0 and i >= args.num_val_batches:
             break
-        ref_tokens, ref_embeddings = batch
+        ref_tokens, ref_embeddings, ref_pc = batch
         ref_tokens=ref_tokens.to(args.device)
         ref_embeddings=ref_embeddings.to(args.device)
         with torch.no_grad():
             model.eval()
             code = model.encode(ref_tokens)
-            val_model.eval()
-            if args.val_model == 'AE':
-              all_refscons.append(val_model.decode(ref_embeddings, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
-              all_modcons.append(val_model.decode(code, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
-            else:
-              all_refscons.append(val_model.sample(ref_embeddings, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
-              all_modcons.append(val_model.sample(code, args.val_sample_num_points, flexibility=args.val_flexibility).detach().cpu())
+            gen_model.eval()
+            if (args.val_type == "CDEmbeddings"):
+                all_refscons.append(gen_model.sample(ref_embeddings, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach().cpu())
+            elif (args.val_type == "CDTruePC"):
+                all_refscons.append(ref_pc)
+            all_modcons.append(gen_model.sample(code, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach().cpu())
 
     all_refscons = torch.cat(all_refscons, dim=0)
     all_modcons = torch.cat(all_modcons, dim=0)
