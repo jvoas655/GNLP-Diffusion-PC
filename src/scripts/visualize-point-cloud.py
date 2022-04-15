@@ -6,9 +6,9 @@ import argparse
 import h5py
 from pathlib import Path
 import torch
-from diffusionpointcloud.models.autoencoder import *
-from diffusionpointcloud.models.vae_gaussian import *
-from diffusionpointcloud.models.vae_flow import *
+from diffusion_point_cloud.models.autoencoder import *
+from diffusion_point_cloud.models.vae_gaussian import *
+from diffusion_point_cloud.models.vae_flow import *
 from utilities.paths import DATA_FOLDER
 
 
