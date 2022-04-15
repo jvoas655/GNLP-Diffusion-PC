@@ -7,7 +7,7 @@ class Backbone(Module):
     def tokenizer(self, x):
         raise NotImplementedError("All backbones need to tokenizer input")
 
-    def encode(self, x):
+    def encode(self, x, *args):
         raise NotImplementedError("All backbones need to encode")
 
     def forward(self, x):

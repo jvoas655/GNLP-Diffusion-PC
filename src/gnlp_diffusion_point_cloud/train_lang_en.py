@@ -23,7 +23,7 @@ from utilities.paths import DATA_FOLDER, PRETRAINED_FOLDER
 parser = argparse.ArgumentParser()
 # Model arguments
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
-parser.add_argument('--backbone', type=str, default="T5", choices=["T5"])
+parser.add_argument('--backbone', type=str, default="T5", choices=["T5", "SIMPLE"])
 parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
 parser.add_argument('--loss', type=str, default="DiffusionMSE", choices=["MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE"])
 parser.add_argument('--resume', type=str, default=None)

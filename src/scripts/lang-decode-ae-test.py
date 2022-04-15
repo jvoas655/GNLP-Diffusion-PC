@@ -11,6 +11,7 @@ from diffusion_point_cloud.utils.data import *
 from diffusion_point_cloud.models.autoencoder import *
 from diffusion_point_cloud.evaluation import EMD_CD
 from utilities.paths import PRETRAINED_FOLDER, RESULTS_FOLDER, DIFFUSION_MODEL_FOLDER, DATA_FOLDER
+from diffusion_point_cloud.models.vae_flow import *
 
 # TODO - make this selection of encoder an argument in the CLI
 from gnlp_diffusion_point_cloud.models.language_encoder import *
@@ -51,24 +52,28 @@ seed_all(ckpt['args'].seed)
 dataset = NLShapeNetCoreEmbeddings(
     desc_path=args.lang_dataset_path,
     embedding_path=args.emb_dataset_path,
+    pc_path=args.dataset_path,
     cates=args.categories,
     split='train',
     tokenizer=lang_model.backbone.tokenizer,
     token_length=args.token_length,
     transform=None,
     size=args.dataset_size,
+    scale_mode='shape_unit'
 )
 dataloader = DataLoader(dataset, batch_size=args.batch_size, num_workers=0)
 
 # Model
-model = AutoEncoder(ckpt['args']).to(args.device)
+# model = AutoEncoder(ckpt['args']).to(args.device)
+model = FlowVAE(ckpt['args']).to(args.device)
 model.load_state_dict(ckpt['state_dict'])
 
 all_recons = []
 all_lang_recons = []
+all_refs = []
 
 for i, batch in enumerate(tqdm(dataloader)):
-    tokens, embeddings = batch
+    tokens, embeddings, pc = batch
     tokens = tokens.to(args.device)
     embeddings = embeddings.to(args.device)
     model.eval()
@@ -79,14 +84,17 @@ for i, batch in enumerate(tqdm(dataloader)):
 
     all_recons.append(recons.detach().cpu())
     all_lang_recons.append(lang_recons.detach().cpu())
+    all_refs.append(pc.detach().cpu())
 
     if i == 32:
       break
 
 all_recons = torch.cat(all_recons, dim=0)
 all_lang_recons = torch.cat(all_lang_recons, dim=0)
+all_refs = torch.cat(all_refs, dim=0)
 
 np.save(os.path.join(args.save_dir, 'out.npy'), all_recons.numpy())
 np.save(os.path.join(args.save_dir, 'lang_out.npy'), all_lang_recons.numpy())
+np.save(os.path.join(args.save_dir, 'ref.npy'), all_refs.numpy())
 
 

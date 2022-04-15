@@ -8,6 +8,7 @@ from typing import Dict, ClassVar
 
 from models.backbones.backbone import Backbone
 from models.backbones.t5 import T5Backbone
+from models.backbones.simple import SimpleBackbone
 from models.encoders.cnn_to_ff import CNNToFF
 from models.encoders.simple_encoder import SimpleEncoder
 from models.losses.contrastive_loss import ContrastiveLoss
@@ -18,7 +19,8 @@ from utils.dataset import NLShapeNetCoreEmbeddings
 # Helpful containers of backbones, encoders, and losses that we can easily look up in code.
 # Dunders (__) so you don't accidentally import them else where, they are only really useful here.
 __back_bones__: Dict[str, 'ClassVar[Backbone]'] = {
-    'T5': T5Backbone
+    'T5': T5Backbone,
+    'SIMPLE': SimpleBackbone
 }
 
 __encoders__: Dict[str, 'ClassVar[Module]'] = {
@@ -68,7 +70,7 @@ class LanguageEncoder(nn.Module):
             param.requires_grad = not kwargs["backbone_freeze"]
         self.encoder = __encoders__[self.encoder_type](*args, **kwargs)
 
-        if self.loss_type  == 'ContrastiveLoss':
+        if self.loss_type == 'ContrastiveLoss':
             self.loss = __losses__[self.loss_type](*args, **kwargs)
         elif self.loss_type == "DiffusionMSE":
             self.loss = __losses__[self.loss_type](
