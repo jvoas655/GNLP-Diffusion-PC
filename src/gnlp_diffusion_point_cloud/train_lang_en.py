@@ -4,6 +4,7 @@ import torch
 import torch.utils.tensorboard
 from torch.nn.utils import clip_grad_norm_
 from tqdm.auto import tqdm
+from IPython.display import Image
 
 from utils.misc import *
 from utils.data import *
@@ -17,6 +18,7 @@ from evaluation.evaluation_metrics import EMD_CD
 
 from pathlib import Path
 from utilities.paths import DATA_FOLDER, PRETRAINED_FOLDER
+from utilities.visualizations import save_pc_drawing
 
 
 # Arguments
@@ -34,6 +36,8 @@ parser.add_argument('--dataset_size', '-ds', type=int, default=-1,
                     help='-1 means all dataset examples are used, anything higher will slice the dataset.')
 parser.add_argument('--use_train_as_validation', action='store_true', dest='use_train_as_validation',
                     help='Use the training dataloader as the validation dataset, useful for debugging.')
+parser.add_argument('--visualize', '-v', action='store_true', dest='visualize')
+parser.add_argument('--skip_checkpoint', action='store_true', dest='skip_checkpoint')
 
 # Datasets and loaders
 parser.add_argument('--lang_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_text_data.hdf5")
@@ -76,6 +80,9 @@ parser.add_argument('--num_inspect_batches', type=int, default=1)
 parser.add_argument('--num_inspect_pointclouds', type=int, default=4)
 args = parser.parse_args()
 seed_all(args.seed)
+
+visualize = args.visualize
+skip_checkpoint = args.skip_checkpoint
 
 # Logging
 if args.logging:
@@ -252,6 +259,10 @@ def validate_loss(it):
     writer.add_scalar('val/emb_cd', emb_cd, it)
     writer.flush()
 
+    if visualize:
+        save_pc_drawing(all_modcons, "Models")
+        Image('./vis.png')
+
     return mod_cd
 
 def validate_inspect(it):
@@ -287,7 +298,9 @@ try:
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
             }
-            ckpt_mgr.save(model, args, cd_loss, opt_states, step=it)
+
+            if skip_checkpoint:
+                ckpt_mgr.save(model, args, cd_loss, opt_states, step=it)
         it += 1
 
 except KeyboardInterrupt:

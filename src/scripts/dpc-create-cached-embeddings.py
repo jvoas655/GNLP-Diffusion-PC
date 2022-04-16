@@ -14,11 +14,11 @@ from utilities.paths import PRETRAINED_FOLDER, DATA_FOLDER
 
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--ckpt', type=str, default=str(PRETRAINED_FOLDER / 'GEN_chair.pt'))
+parser.add_argument('--ckpt', type=str, default=str(PRETRAINED_FOLDER / 'AE_all.pt'))
 parser.add_argument('--save_path', type=str, default=str(DATA_FOLDER / "aligned_embeddings_data.hdf5"))
-parser.add_argument('--device', '-d', type=str, default='cuda')
+parser.add_argument('--device', '-d', type=str, default='cpu')
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default=str(DATA_FOLDER / 'aligned_pc_data.hdf5'))
+parser.add_argument('--dataset_path', type=str, default=str(DATA_FOLDER / 'small_data_aligned_pc_data.hdf5'))
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--data_split', type=str, default='train', help='The data fold you want to cache (training, test, validation)')
 args = parser.parse_args()

@@ -4,7 +4,7 @@ from mpl_toolkits.mplot3d import proj3d
 import math
 
 
-def draw_pc(data, title, outfile=None):
+def __draw_pc__(data, title, outfile=None):
     num_sub_plots = 1
     if (len(data.shape) == 3):
         num_sub_plots = data.shape[0]
@@ -20,4 +20,15 @@ def draw_pc(data, title, outfile=None):
         ax.set_zticks([])
     fig.tight_layout()
     fig.suptitle(title)
+
+    return plt
+
+
+def draw_pc(data, title):
+    __draw_pc__(data, title)
     plt.show()
+
+
+def save_pc_drawing(data, title, outfile='./vis.png'):
+    __draw_pc__(data, title)
+    plt.savefig(outfile)
