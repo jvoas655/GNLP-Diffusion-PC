@@ -10,7 +10,7 @@ from models.backbones.t5 import T5Size
 
 
 class SimpleBackbone(Backbone):
-    def __init__(self, size: Union[str, T5Size], *args, hidden_backbone_size=256, embedding_emb=128, token_length: int = 128, **kwargs):
+    def __init__(self, size: Union[str, T5Size], *args, hidden_backbone_size=512, embedding_emb=128, token_length: int = 128, **kwargs):
         super(SimpleBackbone, self).__init__()
         if isinstance(size, str):
             self.size = T5Size[size].value
@@ -34,8 +34,9 @@ class SimpleBackbone(Backbone):
 
 
     def encode(self, x, hidden=None):
-        output = F.relu(self.C(F.relu(self.embedding(x)).view(x.shape[0], -1).unsqueeze(1)))
-        output = F.max_pool1d(output, (output.shape[-1])).squeeze()
+        output = F.relu(self.embedding(x))
+        # output = F.relu(self.C(output))
+        # output = F.max_pool1d(output, (output.shape[-1])).squeeze()
         output, _ = self.gru(output)
 
         output = self.softmax(self.out(output))

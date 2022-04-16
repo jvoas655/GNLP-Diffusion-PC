@@ -82,18 +82,22 @@ class LanguageEncoder(nn.Module):
                     mode=kwargs["sched_mode"]
                 )
             )
+        elif self.loss_type == "DiffusionGenMSE":
+            pass  # This loss is specific to the generation model used during validation/cached embeddings curation.
         else:
             self.loss = __losses__[self.loss_type]()
 
     def encode(self, x):
         return self.encoder(self.backbone(x))
 
-    def get_loss(self, x, y, *args, **kwargs):
+    def get_loss(self, x, y, *args, pcs=None, targets=None, gen_model=None, **kwargs):
         if self.loss_type == "ContrastiveLoss":
             return self.loss(self.encode(x), y, *args, **kwargs)
         if self.loss_type == "ContrastiveCos":
-            return self.loss(self.encode(x), y, kwargs["targets"])
-        if (self.loss_type == "DiffusionMSE"):
-            return self.loss.get_loss(kwargs["pcs"], self.encode(x))
+            return self.loss(self.encode(x), y, targets)
+        if self.loss_type == "DiffusionMSE":
+            return self.loss.get_loss(pcs, self.encode(x))
+        if self.loss_type == "DiffusionGenMSE":
+            return gen_model.diffusion.get_loss(pcs, self.encode(x))
         else:
             return self.loss(self.encode(x), y)

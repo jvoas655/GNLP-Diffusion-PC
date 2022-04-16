@@ -5,6 +5,8 @@ import torch.utils.tensorboard
 from torch.nn.utils import clip_grad_norm_
 from tqdm.auto import tqdm
 from IPython.display import Image
+import cv2
+import matplotlib.pyplot as plt
 
 from utils.misc import *
 from utils.data import *
@@ -15,6 +17,7 @@ from diffusion_point_cloud.models.vae_flow import *
 from diffusion_point_cloud.models.vae_gaussian import *
 from diffusion_point_cloud.models.autoencoder import *
 from evaluation.evaluation_metrics import EMD_CD
+from diffusion_point_cloud.models.autoencoder import *
 
 from pathlib import Path
 from utilities.paths import DATA_FOLDER, PRETRAINED_FOLDER
@@ -27,7 +30,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--backbone', type=str, default="T5", choices=["T5", "SIMPLE"])
 parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
-parser.add_argument('--loss', type=str, default="DiffusionMSE", choices=["MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE"])
+parser.add_argument('--loss', type=str, default="DiffusionMSE", choices=[
+    "MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE", "DiffusionGenMSE"
+])
 parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=256)
 parser.add_argument('--token_length', type=int, default=128)
@@ -46,8 +51,8 @@ parser.add_argument('--pc_dataset_path', type=str, default=Path(DATA_FOLDER) / "
 parser.add_argument('--categories', type=str_list, default=['chair'])
 parser.add_argument('--train_batch_size', type=int, default=64)
 parser.add_argument('--val_batch_size', type=int, default=64)
-parser.add_argument('--gen_ckpt', type=str, default= PRETRAINED_FOLDER / "GEN_chair.pt")
-parser.add_argument('--gen_model', type=str, default='flow', choices=['flow', 'gaussian'])
+parser.add_argument('--gen_ckpt', type=str, default= PRETRAINED_FOLDER / "AE_all.pt")
+parser.add_argument('--gen_model', type=str, default='AE', choices=['flow', 'gaussian', 'AE'])
 parser.add_argument('--gen_flexibility', type=float, default=0.0)
 parser.add_argument('--gen_sample_num_points', type=int, default=2048)
 parser.add_argument('--num_steps', type=int, default=200)
@@ -116,7 +121,10 @@ if args.device == 'cpu':
 else:
     gen_ckpt = torch.load(args.gen_ckpt)
 
-if args.gen_model == 'gaussian':
+if args.gen_model == 'AE':
+  gen_model = AutoEncoder(gen_ckpt['args']).to(args.device)
+  gen_model.sample = gen_model.decode
+elif args.gen_model == 'gaussian':
     gen_model = GaussianVAE(gen_ckpt['args']).to(args.device)
 elif args.gen_model == 'flow':
     gen_model = FlowVAE(gen_ckpt['args']).to(args.device)
@@ -204,23 +212,25 @@ def train(it):
     model.train()
 
     # Forward
-    if (args.loss == "DiffusionMSE"):
-        loss = model.get_loss(x, y, pcs = batch_pcs)
+    if args.loss == "DiffusionMSE":
+        loss = model.get_loss(x, y, pcs=batch_pcs)
     elif args.loss == "ContrastiveCos":
         loss = model.get_loss(x, y, targets=targets)
+    elif args.loss == "DiffusionGenMSE":
+        loss = model.get_loss(x, y, pcs=batch_pcs, gen_model=gen_model)
     else:
         loss = model.get_loss(x, y)
 
     # Backward and optimize
     loss.backward()
-    orig_grad_norm = clip_grad_norm_(model.parameters(), args.max_grad_norm)
+    # orig_grad_norm = clip_grad_norm_(model.parameters(), args.max_grad_norm)
     optimizer.step()
     scheduler.step()
 
-    logger.info('[Train] Iter %04d | Loss %.6f | Grad %.4f ' % (it, loss.item(), orig_grad_norm))
-    writer.add_scalar('train/loss', loss, it)
-    writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], it)
-    writer.add_scalar('train/grad_norm', orig_grad_norm, it)
+    logger.info('[Train] Iter %04d | Loss %.6f' % (it, loss.item()))
+    # writer.add_scalar('train/loss', loss, it)
+    # writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], it)
+    # writer.add_scalar('train/grad_norm', orig_grad_norm, it)
     writer.flush()
 
 def validate_loss(it):
@@ -235,13 +245,13 @@ def validate_loss(it):
         ref_embeddings=ref_embeddings.to(args.device)
         ref_pc=ref_pc.to(args.device)
         with torch.no_grad():
-            model.eval()
+            # model.eval()
             code = model.encode(ref_tokens)
-            gen_model.eval()
-            seed = torch.seed()
+            # gen_model.eval()
+            # seed = torch.seed()
             #if (args.val_type == "CDEmbeddings"):
             all_embcons.append(gen_model.sample(ref_embeddings, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
-            torch.manual_seed(seed)
+            # torch.manual_seed(seed)
             #elif (args.val_type == "CDTruePC"):
             all_modcons.append(gen_model.sample(code, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
             all_refscons.append(ref_pc)
@@ -255,13 +265,12 @@ def validate_loss(it):
     emb_cd, emb_emd = emb_metrics['MMD-CD'].item(), emb_metrics['MMD-EMD'].item()
 
     logger.info('[Val] Iter %04d | MOD_CD %.6f | EMB_CD %.6f  ' % (it, mod_cd, emb_cd))
-    writer.add_scalar('val/mod_cd', mod_cd, it)
-    writer.add_scalar('val/emb_cd', emb_cd, it)
+    # writer.add_scalar('val/mod_cd', mod_cd, it)
+    # writer.add_scalar('val/emb_cd', emb_cd, it)
     writer.flush()
 
     if visualize:
-        save_pc_drawing(all_modcons, "Models")
-        Image('./vis.png')
+        save_pc_drawing(all_modcons.detach().cpu().numpy(), "Models")
 
     return mod_cd
 
@@ -281,7 +290,7 @@ def validate_inspect(it):
         if i >= args.num_inspect_batches:
             break   # Inspect only 5 batch
 
-    writer.add_mesh('val/pointcloud', recons[:args.num_inspect_pointclouds], global_step=it)
+    # writer.add_mesh('val/pointcloud', recons[:args.num_inspect_pointclouds], global_step=it)
     writer.flush()
 
 # Main loop
@@ -299,7 +308,7 @@ try:
                 'scheduler': scheduler.state_dict(),
             }
 
-            if skip_checkpoint:
+            if not skip_checkpoint:
                 ckpt_mgr.save(model, args, cd_loss, opt_states, step=it)
         it += 1
 
