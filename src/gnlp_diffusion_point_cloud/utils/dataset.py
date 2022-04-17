@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 import torch
 from pathlib import Path
-
+from scipy.spatial import KDTree
 from utilities.paths import DATA_FOLDER
 
 synsetid_to_cate = {
@@ -135,6 +135,7 @@ class NLShapeNetCoreEmbeddings(Dataset):
         self.descriptions = np.squeeze(self.descriptions[shuffle_inds], axis=0)
         self.embeddings = np.squeeze(self.embeddings[shuffle_inds, :], axis=0)
         self.pcs = np.squeeze(self.pcs[shuffle_inds, :, :], axis=0)
+        self.covariance = np.zeros((self.pcs.shape[0], self.pcs.shape[1], int(self.pcs.shape[2] ** 2)))
 
         # Restrict the size of the dataset to the size parameter if it was supplied.
         if self.size > 0:
@@ -144,12 +145,25 @@ class NLShapeNetCoreEmbeddings(Dataset):
             self.descriptions = self.descriptions[0:min(len(self.descriptions), self.size)]
             self.embeddings = self.embeddings[0:min(len(self.embeddings), self.size)]
             self.pcs = self.pcs[0:min(len(self.pcs), self.size)]
+    def gen_loc_cov(self):
+        self.covariance = np.zeros((self.pcs.shape[0], self.pcs.shape[1], int(self.pcs.shape[2] ** 2)))
+        k = 16
+        for i, pc in enumerate(self.pcs):
+            print(i, "/", self.pcs.shape[0])
+            kd = KDTree(pc)
+            knn_pc = pc[kd.query(self.pcs[0, :, :], k)[1]]
+            for j, local_pc in enumerate(knn_pc):
+                self.covariance[i, j, :] = np.cov(np.transpose(local_pc)).flatten()
+    def save_loc_cov(self, file_path):
+        np.save(file_path, self.covariance)
+    def load_loc_cov(self, file_path):
+        self.covariance = np.load(file_path)
 
     def __len__(self):
         return self.descriptions.shape[0]
 
     def __getitem__(self, idx):
-        return self.token_vectors[idx, :], self.embeddings[idx, :], self.pcs[idx, :, :]
+        return self.token_vectors[idx, :], self.embeddings[idx, :], self.pcs[idx, :, :], self.covariance[idx, :, :]
 
 class NLShapeNetCoreJoint(Dataset):
     pass # Will be a join contrastive learning algo

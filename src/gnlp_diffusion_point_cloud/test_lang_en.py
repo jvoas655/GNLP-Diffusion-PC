@@ -14,17 +14,19 @@ from utilities.paths import PRETRAINED_FOLDER
 
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--ckpt', type=str, default=PRETRAINED_FOLDER / 'AE_all.pt')
+parser.add_argument('--ckpt', type=str, default=PRETRAINED_FOLDER / 'LEN_chair.pt')
 parser.add_argument('--categories', type=str_list, default=["chair"])
 parser.add_argument('--save_dir', type=str, default='./results')
 parser.add_argument('--device', type=str, default='cuda')
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default=DATA_FOLDER / 'aligned_pc_data.hdf5')
+parser.add_argument('--lang_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_text_data.hdf5")
+parser.add_argument('--emb_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_embeddings_data.hdf5")
+parser.add_argument('--pc_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_pc_data.hdf5")
 parser.add_argument('--batch_size', type=int, default=64)
 args = parser.parse_args()
 
 # Logging
-save_dir = os.path.join(args.save_dir, 'AE_Ours_%s_%d' % ('_'.join(args.categories), int(time.time())) )
+save_dir = os.path.join(args.save_dir, 'LEN_Ours_%s_%d' % ('_'.join(args.categories), int(time.time())) )
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 logger = get_logger('test', save_dir)

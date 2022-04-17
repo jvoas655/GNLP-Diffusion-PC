@@ -11,7 +11,7 @@ from models.backbones.t5 import T5Backbone
 from models.encoders.cnn_to_ff import CNNToFF
 from models.encoders.simple_encoder import SimpleEncoder
 from models.losses.contrastive_loss import ContrastiveLoss
-from diffusion_point_cloud.models.diffusion import *
+from models.decoders.diffusion import *
 from utils.dataset import NLShapeNetCoreEmbeddings
 
 
@@ -41,32 +41,32 @@ class LanguageEncoder(nn.Module):
     This class handles the raw input, language encoding, encoding to point cloud embeddings, and generating loss.
     """
 
-    backbone: Backbone
-    encoder: nn.Module
+    text_backbone: Backbone
+    text_encoder: nn.Module
     loss: nn.Module
 
-    backbone_type: str
-    encoder_type: str
+    text_backbone_type: str
+    text_encoder_type: str
     loss_type: str
 
 
     def __init__(
             self,
-            backbone: str = "T5",
-            encoder: str = "CNN2FF",
+            text_backbone: str = "T5",
+            text_transfer: str = "CNN2FF",
             loss: str = "MSE",
             *args,
             **kwargs
     ):
         super().__init__()
-        self.backbone_type = backbone
-        self.encoder_type = encoder
+        self.text_backbone_type = text_backbone
+        self.text_transfer_type = text_transfer
         self.loss_type = loss
 
-        self.backbone = __back_bones__[self.backbone_type](*args, **kwargs)
-        for param in self.backbone.parameters():
+        self.text_encoder_backbone = __back_bones__[self.text_backbone_type](*args, **kwargs)
+        for param in self.text_encoder_backbone.parameters():
             param.requires_grad = not kwargs["backbone_freeze"]
-        self.encoder = __encoders__[self.encoder_type](*args, **kwargs)
+        self.text_transfer = __encoders__[self.text_transfer_type](*args, **kwargs)
 
         if self.loss_type  == 'ContrastiveLoss':
             self.loss = __losses__[self.loss_type](*args, **kwargs)
@@ -84,7 +84,7 @@ class LanguageEncoder(nn.Module):
             self.loss = __losses__[self.loss_type]()
 
     def encode(self, x):
-        return self.encoder(self.backbone(x))
+        return self.text_transfer(self.text_backbone(x))
 
     def get_loss(self, x, y, *args, **kwargs):
         if self.loss_type == "ContrastiveLoss":

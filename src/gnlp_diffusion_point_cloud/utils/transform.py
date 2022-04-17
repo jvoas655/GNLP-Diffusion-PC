@@ -188,7 +188,7 @@ class AddNoiseForEval(object):
 
 
 class IdentityTransform(object):
-    
+
     def __call__(self, data):
         return data
 

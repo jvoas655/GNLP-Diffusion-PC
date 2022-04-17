@@ -6,9 +6,6 @@ import argparse
 import h5py
 from pathlib import Path
 import torch
-from diffusionpointcloud.models.autoencoder import *
-from diffusionpointcloud.models.vae_gaussian import *
-from diffusionpointcloud.models.vae_flow import *
 from utilities.paths import DATA_FOLDER
 
 
@@ -40,11 +37,12 @@ parser.add_argument('--gen_model', type=str, default='flow', choices=['flow', 'g
 parser.add_argument('--normalize', type=str, default='shape_bbox', choices=[None, 'shape_unit', 'shape_bbox'])
 parser.add_argument("--start_ind", type=int, default=-1)
 parser.add_argument("--stop_ind", type=int, default=-1)
+parser.add_argument("--stride", type=int, default=-1)
 args = parser.parse_args()
 args.mode = args.mode.split(",")
 
 if (args.start_ind != -1 and args.stop_ind != -1):
-    raw_data = np.load(args.input_data)[args.start_ind:args.stop_ind, :, :]
+    raw_data = np.load(args.input_data)[args.start_ind:args.stop_ind:args.stride, :, :]
 elif (args.start_ind != -1):
     raw_data = np.load(args.input_data)[args.start_ind:, :, :]
 else:
@@ -59,26 +57,6 @@ if (args.normalize == "shape_bbox"):
 data_set = []
 if ("raw" in args.mode):
     data_set.append(raw_data)
-if (("AE" in args.mode or "AE_GEN" in args.mode) and args.ae_path != ""):
-    ckpt = torch.load(args.ae_path)
-    ae_model = AutoEncoder(ckpt['args']).to(args.device)
-    ae_model.load_state_dict(ckpt['state_dict'])
-    ae_model.eval()
-    encoded_data = ae_model.encode(torch.tensor(raw_data).cuda())
-    decoded_data = ae_model.decode(encoded_data, raw_data.shape[1])
-    if ("AE" in args.mode):
-        data_set.append(decoded_data.clone().detach().cpu().numpy())
-
-if ("AE_GEN" in args.mode and args.gen_path != ""):
-    ckpt = torch.load(args.gen_path)
-    if args.gen_model == 'gaussian':
-        gen_model = GaussianVAE(ckpt['args']).to(args.device)
-    elif args.gen_model == 'flow':
-        gen_model = FlowVAE(ckpt['args']).to(args.device)
-    gen_model.load_state_dict(ckpt['state_dict'])
-    gen_model.eval()
-    dif_data = gen_model.sample(encoded_data, raw_data.shape[1], flexibility=ckpt['args'].flexibility)
-    data_set.append(dif_data.clone().detach().cpu().numpy())
 data = np.array(data_set).transpose(1, 0, 2, 3).reshape(-1, raw_data.shape[1], 3)
 
 

@@ -12,6 +12,8 @@ from models.vae_gaussian import *
 from models.vae_flow import *
 from models.flow import add_spectral_norm, spectral_norm_power_iteration
 from evaluation import *
+from utilities.paths import DATA_FOLDER
+from utilities.paths import PRETRAINED_FOLDER
 
 def normalize_point_clouds(pcs, mode, logger):
     if mode is None:
@@ -35,16 +37,16 @@ def normalize_point_clouds(pcs, mode, logger):
 
 # Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--ckpt', type=str, default='./pretrained/GEN_airplane.pt')
-parser.add_argument('--categories', type=str_list, default=['table'])
+parser.add_argument('--ckpt', type=str, default=PRETRAINED_FOLDER / 'GEN_all.pt')
+parser.add_argument('--categories', type=str_list, default=['chair'])
 parser.add_argument('--save_dir', type=str, default='./results')
 parser.add_argument('--device', type=str, default='cuda')
 # Datasets and loaders
-parser.add_argument('--dataset_path', type=str, default='./data/aligned_pc_data.hdf5')
+parser.add_argument('--dataset_path', type=str, default=DATA_FOLDER / 'aligned_pc_data.hdf5')
 parser.add_argument('--batch_size', type=int, default=64)
 # Sampling
 parser.add_argument('--sample_num_points', type=int, default=2048)
-parser.add_argument('--normalize', type=str, default='shape_bbox', choices=[None, 'shape_unit', 'shape_bbox'])
+parser.add_argument('--normalize', type=str, default='shape_unit', choices=[None, 'shape_unit', 'shape_bbox'])
 parser.add_argument('--seed', type=int, default=9988)
 args = parser.parse_args()
 

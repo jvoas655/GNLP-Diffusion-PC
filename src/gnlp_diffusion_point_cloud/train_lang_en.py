@@ -10,6 +10,7 @@ from utils.data import *
 from utils.transform import *
 from utils.dataset import *
 from models.language_encoder import *
+from models.DCCAE import *
 from diffusion_point_cloud.models.vae_flow import *
 from diffusion_point_cloud.models.vae_gaussian import *
 from diffusion_point_cloud.models.autoencoder import *
@@ -23,9 +24,13 @@ from utilities.paths import DATA_FOLDER, PRETRAINED_FOLDER
 parser = argparse.ArgumentParser()
 # Model arguments
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
-parser.add_argument('--backbone', type=str, default="T5", choices=["T5"])
-parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
-parser.add_argument('--loss', type=str, default="DiffusionMSE", choices=["MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE"])
+parser.add_argument('--mode', type=str, default="multi", choices=["multi", "single"])
+parser.add_argument('--text_backbone', type=str, default="T5", choices=["T5"])
+parser.add_argument('--text_transfer', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
+parser.add_argument('--text_decoder', type=str, default="FF2CNN", choices=["FF2CNN"])
+parser.add_argument('--pc_decoder', type=str, default="FoldingNet", choices=["FoldingNet"])
+parser.add_argument('--pc_encoder', type=str, default="GraphEncoder", choices=["GraphEncoder"])
+parser.add_argument('--loss', type=str, default="MSE", choices=["MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE"])
 parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=256)
 parser.add_argument('--token_length', type=int, default=128)
@@ -40,8 +45,8 @@ parser.add_argument('--lang_dataset_path', type=str, default=Path(DATA_FOLDER) /
 parser.add_argument('--emb_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_embeddings_data.hdf5")
 parser.add_argument('--pc_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_pc_data.hdf5")
 parser.add_argument('--categories', type=str_list, default=['chair'])
-parser.add_argument('--train_batch_size', type=int, default=64)
-parser.add_argument('--val_batch_size', type=int, default=64)
+parser.add_argument('--train_batch_size', type=int, default=32)
+parser.add_argument('--val_batch_size', type=int, default=32)
 parser.add_argument('--gen_ckpt', type=str, default= PRETRAINED_FOLDER / "GEN_chair.pt")
 parser.add_argument('--gen_model', type=str, default='flow', choices=['flow', 'gaussian'])
 parser.add_argument('--gen_flexibility', type=float, default=0.0)
@@ -68,12 +73,15 @@ parser.add_argument('--logging', type=eval, default=True, choices=[True, False])
 parser.add_argument('--log_root', type=str, default='./logs_ae')
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--max_iters', type=int, default=float('inf'))
-parser.add_argument('--val_freq', type=float, default=1000)
-parser.add_argument('--val_type', type=str, default='CDEmbeddings', choices=['CDEmbeddings', 'CDTruePC'])
+parser.add_argument('--val_freq', type=float, default=3000)
+#parser.add_argument('--val_type', type=str, default='CDEmbeddings', choices=['CDEmbeddings', 'CDTruePC'])
 parser.add_argument('--tag', type=str, default=None)
 parser.add_argument('--num_val_batches', type=int, default=-1)
 parser.add_argument('--num_inspect_batches', type=int, default=1)
 parser.add_argument('--num_inspect_pointclouds', type=int, default=4)
+parser.add_argument("--cov_mode", type=str, default=None, choices=["gen", "save", "load"])
+parser.add_argument("--cov_val_path", type=str, default=DATA_FOLDER / "aligned_cov_val_data.npy")
+parser.add_argument("--cov_train_path", type=str, default=DATA_FOLDER / "aligned_cov_train_data.npy")
 args = parser.parse_args()
 seed_all(args.seed)
 
@@ -94,10 +102,10 @@ logger.info('Building model...')
 if args.resume is not None:
     logger.info('Resuming from checkpoint...')
     ckpt = torch.load(args.resume)
-    model = LanguageEncoder(**vars(ckpt['args'])).to(args.device)
+    model = DCCAE(**vars(ckpt['args'])).to(args.device)
     model.load_state_dict(ckpt['state_dict'])
 else:
-    model = LanguageEncoder(**vars(args)).to(args.device)
+    model = DCCAE(**vars(args)).to(args.device)
 
 logger.info(repr(model))
 
@@ -128,7 +136,7 @@ train_dset = NLShapeNetCoreEmbeddings(
     pc_path=args.pc_dataset_path,
     cates=args.categories,
     split='train',
-    tokenizer=model.backbone.tokenizer,
+    tokenizer=model.text_encoder_backbone.tokenizer,
     token_length=args.token_length,
     scale_mode=args.scale_mode,
     transform=transform,
@@ -140,12 +148,21 @@ val_dset = NLShapeNetCoreEmbeddings(
     pc_path=args.pc_dataset_path,
     cates=args.categories,
     split='val',
-    tokenizer=model.backbone.tokenizer,
+    tokenizer=model.text_encoder_backbone.tokenizer,
     token_length=args.token_length,
     scale_mode=args.scale_mode,
     transform=transform,
     size=args.dataset_size,
 )
+if (args.cov_mode == "gen" or args.cov_mode == "save"):
+    train_dset.gen_loc_cov()
+    val_dset.gen_loc_cov()
+if (args.cov_mode == "save"):
+    train_dset.save_loc_cov(args.cov_train_path)
+    val_dset.save_loc_cov(args.cov_val_path)
+if (args.cov_mode == "load"):
+    train_dset.load_loc_cov(args.cov_train_path)
+    val_dset.load_loc_cov(args.cov_val_path)
 train_iter = get_data_iterator(DataLoader(
     train_dset,
     batch_size=args.train_batch_size,
@@ -178,7 +195,7 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
 # Train, validate
 def train(it):
     # Load data
-    batch_tokens, batch_encodings, batch_pcs = next(train_iter)
+    batch_tokens, batch_encodings, batch_pcs, batch_cov = next(train_iter)
     if (args.loss == "ContrastiveCos"):
         shuffle_size = min(int(batch_tokens.shape[0] / 2), args.contrastive_size)
         rand_start = random.randint(0, batch_tokens.shape[0] - shuffle_size)
@@ -191,18 +208,22 @@ def train(it):
     x = batch_tokens.to(args.device)
     y = batch_encodings.to(args.device)
     batch_pcs = batch_pcs.to(args.device)
+    batch_cov = batch_cov.to(args.device)
 
     # Reset grad and model state
     optimizer.zero_grad()
     model.train()
 
     # Forward
-    if (args.loss == "DiffusionMSE"):
-        loss = model.get_loss(x, y, pcs = batch_pcs)
-    elif args.loss == "ContrastiveCos":
-        loss = model.get_loss(x, y, targets=targets)
-    else:
-        loss = model.get_loss(x, y)
+    if (args.mode == "single"):
+        if (args.loss == "DiffusionMSE"):
+            loss = model.get_loss(x, y, pcs = batch_pcs)
+        elif args.loss == "ContrastiveCos":
+            loss = model.get_loss(x, y, targets=targets)
+        else:
+            loss = model.get_loss(x, y)
+    elif (args.mode == "multi"):
+        loss = model.get_loss(x_pc = torch.cat((batch_pcs, batch_cov), 2).float(), y_pc = batch_pcs)["pc_loss"]
 
     # Backward and optimize
     loss.backward()
@@ -217,42 +238,79 @@ def train(it):
     writer.flush()
 
 def validate_loss(it):
-    all_refscons = []
-    all_embcons = []
-    all_modcons = []
-    for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
-        if args.num_val_batches > 0 and i >= args.num_val_batches:
-            break
-        ref_tokens, ref_embeddings, ref_pc = batch
-        ref_tokens=ref_tokens.to(args.device)
-        ref_embeddings=ref_embeddings.to(args.device)
-        ref_pc=ref_pc.to(args.device)
-        with torch.no_grad():
-            model.eval()
-            code = model.encode(ref_tokens)
-            gen_model.eval()
-            seed = torch.seed()
-            #if (args.val_type == "CDEmbeddings"):
-            all_embcons.append(gen_model.sample(ref_embeddings, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
-            torch.manual_seed(seed)
-            #elif (args.val_type == "CDTruePC"):
-            all_modcons.append(gen_model.sample(code, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
-            all_refscons.append(ref_pc)
+    if (args.mode == "single"):
+        all_refscons = []
+        all_embcons = []
+        all_modcons = []
+        for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
+            if args.num_val_batches > 0 and i >= args.num_val_batches:
+                break
+            ref_tokens, ref_embeddings, ref_pc, _ = batch
+            ref_tokens=ref_tokens.to(args.device)
+            ref_embeddings=ref_embeddings.to(args.device)
+            ref_pc=ref_pc.to(args.device)
+            with torch.no_grad():
+                model.eval()
+                code = model.encode(ref_tokens)
+                gen_model.eval()
+                seed = torch.seed()
+                #if (args.val_type == "CDEmbeddings"):
+                all_embcons.append(gen_model.sample(ref_embeddings, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
+                torch.manual_seed(seed)
+                #elif (args.val_type == "CDTruePC"):
+                all_modcons.append(gen_model.sample(code, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
+                all_refscons.append(ref_pc)
 
-    all_refscons = torch.cat(all_refscons, dim=0)
-    all_modcons = torch.cat(all_modcons, dim=0)
-    all_embcons = torch.cat(all_embcons, dim=0)
-    mod_metrics = EMD_CD(all_modcons, all_refscons, batch_size=args.val_batch_size)
-    mod_cd, mod_emd = mod_metrics['MMD-CD'].item(), mod_metrics['MMD-EMD'].item()
-    emb_metrics = EMD_CD(all_embcons, all_refscons, batch_size=args.val_batch_size)
-    emb_cd, emb_emd = emb_metrics['MMD-CD'].item(), emb_metrics['MMD-EMD'].item()
+        all_refscons = torch.cat(all_refscons, dim=0)
+        all_modcons = torch.cat(all_modcons, dim=0)
+        all_embcons = torch.cat(all_embcons, dim=0)
+        mod_metrics = EMD_CD(all_modcons, all_refscons, batch_size=args.val_batch_size)
+        mod_cd, mod_emd = mod_metrics['MMD-CD'].item(), mod_metrics['MMD-EMD'].item()
+        emb_metrics = EMD_CD(all_embcons, all_refscons, batch_size=args.val_batch_size)
+        emb_cd, emb_emd = emb_metrics['MMD-CD'].item(), emb_metrics['MMD-EMD'].item()
 
-    logger.info('[Val] Iter %04d | MOD_CD %.6f | EMB_CD %.6f  ' % (it, mod_cd, emb_cd))
-    writer.add_scalar('val/mod_cd', mod_cd, it)
-    writer.add_scalar('val/emb_cd', emb_cd, it)
-    writer.flush()
+        logger.info('[Val] Iter %04d | MOD_CD %.6f | EMB_CD %.6f  ' % (it, mod_cd, emb_cd))
+        writer.add_scalar('val/mod_cd', mod_cd, it)
+        writer.add_scalar('val/emb_cd', emb_cd, it)
+        writer.flush()
+    else:
+        all_refscons = []
+        all_pc_cons = []
+        all_text_cons = []
+        for i, batch in enumerate(tqdm(val_loader, desc='Validate')):
+            if args.num_val_batches > 0 and i >= args.num_val_batches:
+                break
+            ref_tokens, ref_embeddings, ref_pc, ref_cov = batch
+            ref_tokens=ref_tokens.to(args.device)
+            ref_embeddings=ref_embeddings.to(args.device)
+            ref_pc=ref_pc.to(args.device)
+            ref_cov=ref_cov.to(args.device)
+            with torch.no_grad():
+                model.eval()
+                _, text_code = model.encode_text(ref_tokens)
+                pc_code = model.encode_pc(torch.cat((ref_pc, ref_cov), 2).float())
+                all_text_cons.append(model.decode_pc(text_code).detach())
+                all_pc_cons.append(model.decode_pc(pc_code).detach())
+                all_refscons.append(ref_pc)
 
-    return mod_cd
+
+        all_text_cons = torch.cat(all_text_cons, dim=0)
+        all_pc_cons = torch.cat(all_pc_cons, dim=0)
+        all_refscons = torch.cat(all_refscons, dim=0)
+        np.save(DATA_FOLDER / "text_cons.npy", all_text_cons.cpu().numpy())
+        np.save(DATA_FOLDER / "pc_cons.npy", all_pc_cons.cpu().numpy())
+        np.save(DATA_FOLDER / "ref_cons.npy", all_refscons.cpu().numpy())
+        pc_metrics = EMD_CD(all_pc_cons, all_refscons, batch_size=args.val_batch_size)
+        pc_cd, pc_emd = pc_metrics['MMD-CD'].item(), pc_metrics['MMD-EMD'].item()
+        text_metrics = EMD_CD(all_text_cons, all_refscons, batch_size=args.val_batch_size)
+        text_cd, text_emd = text_metrics['MMD-CD'].item(), text_metrics['MMD-EMD'].item()
+
+        logger.info('[Val] Iter %04d | PC_CD %.6f | TEXT_CD %.6f  ' % (it, pc_cd, text_cd))
+        writer.add_scalar('val/pc_cd', pc_cd, it)
+        writer.add_scalar('val/text_cd', text_cd, it)
+        writer.flush()
+
+    return text_cd
 
 def validate_inspect(it):
     sum_n = 0
@@ -282,7 +340,7 @@ try:
         if it % args.val_freq == 0 or it == args.max_iters:
             with torch.no_grad():
                 cd_loss = validate_loss(it)
-                validate_inspect(it)
+                #validate_inspect(it)
             opt_states = {
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),

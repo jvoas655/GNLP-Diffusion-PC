@@ -68,7 +68,10 @@ class T5Backbone(Backbone):
         self.__tokenizer__.pad_token = self.__tokenizer__.eos_token
 
         self.model = T5ForConditionalGeneration.from_pretrained(self.size)
-
+    def to(self, device):
+        super().to(device)
+        self.model.to(device)
+        return self
     def tokenizer(
             self,
             x,
