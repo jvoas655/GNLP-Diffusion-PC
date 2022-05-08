@@ -47,6 +47,8 @@ class NLShapeNetCoreEmbeddings(Dataset):
             split,
             transform: Callable = None,
             size: int = -1,
+            multi_description_per_object: bool = False,
+            multi_description_sample_method: str = 'sample'
     ):
         super().__init__()
         assert isinstance(cates, list), '`cates` must be a list of cate names.'
@@ -65,6 +67,9 @@ class NLShapeNetCoreEmbeddings(Dataset):
         self.split = split
         self.transform = transform
         self.stats = None
+
+        self.multi_description_per_object = multi_description_per_object
+        self.multi_description_sample_method = multi_description_sample_method
 
         # The size of the dataset, -1 means the entire dataset, if you want to run experiments on small sets for
         # convergence testing etc. set this to a low value.
@@ -91,7 +96,10 @@ class NLShapeNetCoreEmbeddings(Dataset):
         self.pcs = None
         for synsetid in self.cate_synsetids:
             for j, desc in enumerate(text_data_file[synsetid][self.split]):
-                self.descriptions.append(desc.decode(encoding))
+                if self.multi_description_per_object:
+                    self.descriptions.append(desc.decode(encoding).split('|||'))
+                else:
+                    self.descriptions.append(desc.decode(encoding))
             if (isinstance(self.embeddings, np.ndarray)):
                 self.embeddings = np.append(self.embeddings, cached_embeddings_file[synsetid][self.split][()], axis=0)
             else:
@@ -123,18 +131,32 @@ class NLShapeNetCoreEmbeddings(Dataset):
                 scale = torch.ones([1, 1])
             self.pcs[j, :, :] = ((pc - shift) / scale).numpy()
 
-        self.token_vectors = self.tokenizer(self.descriptions)
+        if self.multi_description_per_object:
+            if self.multi_description_sample_method == 'sample':
+                self.token_vectors = [self.tokenizer(x) for x in self.descriptions]
+            else:
+                self.token_vectors = self.tokenizer([f" It could also be described as ".join(x) for x in self.descriptions])
+        else:
+            self.token_vectors = self.tokenizer(self.descriptions)
+
         self.descriptions = np.array(self.descriptions)
 
         # TODO - why is this here? This should be somewhere very clear at the top of a script, this will lead to
         # bugs when you want to make something random but are confused on why it's getting the same results.
         np.random.seed(2022)
-        shuffle_inds = np.random.shuffle(np.arange(self.descriptions.shape[0]))
+        shuffle_inds = np.arange(self.descriptions.shape[0])
+        np.random.shuffle(shuffle_inds)
 
-        self.token_vectors = np.squeeze(self.token_vectors.detach().numpy()[shuffle_inds, :], axis=0)
-        self.descriptions = np.squeeze(self.descriptions[shuffle_inds], axis=0)
-        self.embeddings = np.squeeze(self.embeddings[shuffle_inds, :], axis=0)
-        self.pcs = np.squeeze(self.pcs[shuffle_inds, :, :], axis=0)
+        if self.multi_description_per_object:
+            token_vecs = []
+            for i in shuffle_inds:
+                token_vecs.append(self.token_vectors[i])
+            self.token_vectors = token_vecs
+        else:
+            self.token_vectors = np.squeeze(self.token_vectors.detach().numpy()[shuffle_inds, :], axis=0)
+        self.descriptions = self.descriptions[shuffle_inds]
+        self.embeddings = self.embeddings[shuffle_inds, :]
+        self.pcs = self.pcs[shuffle_inds, :, :]
 
         # Restrict the size of the dataset to the size parameter if it was supplied.
         if self.size > 0:
@@ -149,7 +171,12 @@ class NLShapeNetCoreEmbeddings(Dataset):
         return self.descriptions.shape[0]
 
     def __getitem__(self, idx):
-        return self.token_vectors[idx, :], self.embeddings[idx, :], self.pcs[idx, :, :]
+        if self.multi_description_sample_method == 'sample':
+            descrip_idx = np.random.choice(range(0, len(self.token_vectors[idx])))
+            tokens = self.token_vectors[idx][descrip_idx]
+            return tokens, self.embeddings[idx, :], self.pcs[idx, :, :]
+        else:
+            return self.token_vectors[idx, :], self.embeddings[idx, :], self.pcs[idx, :, :]
 
 class NLShapeNetCoreJoint(Dataset):
     pass # Will be a join contrastive learning algo

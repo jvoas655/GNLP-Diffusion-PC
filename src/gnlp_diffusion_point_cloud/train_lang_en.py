@@ -30,9 +30,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--backbone', type=str, default="T5", choices=["T5", "SIMPLE"])
 parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
-parser.add_argument('--loss', type=str, default="DiffusionMSE", choices=[
-    "MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE", "DiffusionGenMSE"
-])
+parser.add_argument('--losses', nargs='+', type=str, default="DiffusionMSE",
+                    choices=["MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE", "DiffusionGenMSE"]
+                    )
+parser.add_argument('--loss_weights', nargs='+', type=float, default=[1.0],
+                    help='When multiple losses are chosen, you can specify how much impact each loss has by passing in'
+                         ' a weight value for each loss in order of the losses specified by --losses')
 parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=256)
 parser.add_argument('--token_length', type=int, default=128)
@@ -62,6 +65,12 @@ parser.add_argument('--sched_mode', type=str, default='linear')
 parser.add_argument('--residual', type=eval, default=True, choices=[True, False])
 parser.add_argument('--backbone_freeze', type=eval, default=False, choices=[True, False])
 parser.add_argument('--scale_mode', type=str, default='shape_unit')
+parser.add_argument('--multi_description_per_object', '-mdpo', action='store_true', dest='multi_description_per_object',
+                    help='Used for when your aligned_text file has ||| delimiting multiple descriptions for the same '
+                         'PC')
+parser.add_argument('--multi_description_sample_method', '-mdsm', choices=['sample', 'combined'],
+                    type=str, default='sample')
+
 
 # Optimizer and scheduler
 parser.add_argument('--lr', type=float, default=1e-3)
@@ -148,6 +157,8 @@ train_dset = NLShapeNetCoreEmbeddings(
     scale_mode=args.scale_mode,
     transform=transform,
     size=args.dataset_size,
+    multi_description_per_object=args.multi_description_per_object,
+    multi_description_sample_method=args.multi_description_sample_method
 )
 val_dset = NLShapeNetCoreEmbeddings(
     desc_path=args.lang_dataset_path,
@@ -160,6 +171,8 @@ val_dset = NLShapeNetCoreEmbeddings(
     scale_mode=args.scale_mode,
     transform=transform,
     size=args.dataset_size,
+    multi_description_per_object=args.multi_description_per_object,
+    multi_description_sample_method=args.multi_description_sample_method
 )
 train_iter = get_data_iterator(DataLoader(
     train_dset,
@@ -189,12 +202,13 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
     gamma=(args.end_lr / args.lr) ** (1/10)
 )
 
+train_dset[0]
 
 # Train, validate
 def train(it):
     # Load data
     batch_tokens, batch_encodings, batch_pcs = next(train_iter)
-    if (args.loss == "ContrastiveCos"):
+    if ("ContrastiveCos" in args.losses):
         shuffle_size = min(int(batch_tokens.shape[0] / 2), args.contrastive_size)
         rand_start = random.randint(0, batch_tokens.shape[0] - shuffle_size)
         targets = np.ones(batch_tokens.shape[0])
@@ -212,22 +226,28 @@ def train(it):
     model.train()
 
     # Forward
-    if args.loss == "DiffusionMSE":
-        loss = model.get_loss(x, y, pcs=batch_pcs)
-    elif args.loss == "ContrastiveCos":
-        loss = model.get_loss(x, y, targets=targets)
-    elif args.loss == "DiffusionGenMSE":
-        loss = model.get_loss(x, y, pcs=batch_pcs, gen_model=gen_model)
-    else:
-        loss = model.get_loss(x, y)
+    losses = []
+    for loss in args.losses:
+        if loss == "DiffusionMSE":
+            losses.append(model.get_loss(x, y, pcs=batch_pcs))
+        elif loss == "ContrastiveCos":
+            losses.append(model.get_loss(x, y, targets=targets))
+        elif loss == "DiffusionGenMSE":
+            losses.append(model.get_loss(x, y, pcs=batch_pcs, gen_model=gen_model))
+        else:
+            losses.append(model.get_loss(x, y))
+
+    loss_weights = args.loss_weights
+    if len(loss_weights) == 1:
+        loss_weights = [loss_weights[0]] * len(losses)
 
     # Backward and optimize
-    loss.backward()
+    [(x * loss_weights[idx]).backward() for idx, x in enumerate(losses)]
     # orig_grad_norm = clip_grad_norm_(model.parameters(), args.max_grad_norm)
     optimizer.step()
     scheduler.step()
 
-    logger.info('[Train] Iter %04d | Loss %.6f' % (it, loss.item()))
+    logger.info('[Train] Iter %04d | Loss %.6f' % (it, sum(losses).item()))
     # writer.add_scalar('train/loss', loss, it)
     # writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], it)
     # writer.add_scalar('train/grad_norm', orig_grad_norm, it)
