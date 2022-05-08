@@ -175,6 +175,8 @@ class NLShapeNetCoreEmbeddings(Dataset):
             descrip_idx = np.random.choice(range(0, len(self.token_vectors[idx])))
             tokens = self.token_vectors[idx][descrip_idx]
             return tokens, self.embeddings[idx, :], self.pcs[idx, :, :]
+        elif self.multi_description_sample_method == 'combined':
+            return self.token_vectors[idx], self.embeddings[idx, :], self.pcs[idx, :, :]
         else:
             return self.token_vectors[idx, :], self.embeddings[idx, :], self.pcs[idx, :, :]
 
