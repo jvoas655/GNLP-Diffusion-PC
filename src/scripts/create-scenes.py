@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 import nltk
 import random
 
-from utilities.paths import DATA_FOLDER
-
+#from utilities.paths import DATA_FOLDER
+DATA_FOLDER = Path("C:\\Users\\Jorda\\Documents\\School\\Spring2022\\CS395T\\Project\\Dup\\GNLP-Diffusion-PC\\src\\data")
 
 synsetid_to_cate = {
     '02691156': 'airplane', '02773838': 'bag', '02801938': 'basket',
@@ -141,11 +141,11 @@ def gen_scene(args, text, pc):
         x_off, z_off = referential_offsets[ref]
         rx = np.clip(np.random.normal(), a_min=-0.5, a_max = 0.5)
         rz = np.clip(np.random.normal(), a_min=-0.5, a_max = 0.5)
-        data_1[:, 0] += 3 + rx
-        data_1[:, 2] += 3 + rz
+        data_1[:, 0] += 4 + rx
+        data_1[:, 2] += 4 + rz
 
-        data_2[:, 0] += 3 + rx
-        data_2[:, 2] += 3 + rz
+        data_2[:, 0] += 4 + rx
+        data_2[:, 2] += 4 + rz
         if (x_off < 0):
             data_2[:, 0] -= np.max(data_2[:, 0]) - np.min(data_1[:, 0])
         elif (x_off > 0):
@@ -159,7 +159,8 @@ def gen_scene(args, text, pc):
         fused_data = np.concatenate((data_1, data_2))
         if (args.floor_spacing):
             fused_data = np.concatenate((floor, fused_data))
-        fused_data[:, :] -= 4.5
+        fused_data[:, 0] -= 5
+        fused_data[:, 2] -= 5
     else:
         # Scene referential
         pos1 = random.randint(0, len(segments)-1)
@@ -181,7 +182,8 @@ def gen_scene(args, text, pc):
         fused_data[:, 2] += np.clip(np.random.normal(1), a_min=0, a_max=3 - max(obj_1_bounds[2, 1], obj_2_bounds[2, 1]))
         if (args.floor_spacing):
             fused_data = np.concatenate((floor, fused_data))
-        fused_data[:, :] -= 4.5
+        fused_data[:, 0] -= 5
+        fused_data[:, 2] -= 5
     if (args.inspect):
         display(defn_str, fused_data)
     return defn_str, fused_data
@@ -218,7 +220,7 @@ if __name__ == "__main__":
                            default=16)
     argparser.add_argument('--inspect',
                            help='',
-                           default=False,
+                           default=True,
                            action = "store_true")
 
     args = argparser.parse_args()
