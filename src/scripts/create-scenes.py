@@ -348,12 +348,10 @@ if __name__ == "__main__":
     if (not args.inspect):
         out_pc_data = h5py.File(args.output_pc, "w")
         out_text_data = h5py.File(args.output_text, "w")
-        for cate in pc_data:
-            out_pc_data.create_group(cate)
-            out_text_data.create_group(cate)
-            out_pc_data[cate].create_dataset("train", data = train_pc)
-            out_text_data[cate].create_dataset("train", data = train_text)
-            out_pc_data[cate].create_dataset("val", data = val_pc)
-            out_text_data[cate].create_dataset("val", data = val_text)
-            out_pc_data[cate].create_dataset("test", data = test_pc)
-            out_text_data[cate].create_dataset("test", data = test_text)
+
+        out_pc_data.create_dataset("train", data = train_pc)
+        out_text_data.create_dataset("train", data = train_text)
+        out_pc_data.create_dataset("val", data = val_pc)
+        out_text_data.create_dataset("val", data = val_text)
+        out_pc_data.create_dataset("test", data = test_pc)
+        out_text_data.create_dataset("test", data = test_text)
