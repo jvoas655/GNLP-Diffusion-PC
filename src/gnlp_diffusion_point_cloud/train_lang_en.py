@@ -89,8 +89,8 @@ parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--max_iters', type=int, default=float('inf'))
 parser.add_argument('--val_freq', type=float, default=1000)
 parser.add_argument('--val_type', type=str, default='CDEmbeddings', choices=['CDEmbeddings', 'CDTruePC'])
-parser.add_argument('--tag', type=str, default=None)
 parser.add_argument('--num_val_batches', type=int, default=24)
+parser.add_argument('--tag', type=str, default="")
 parser.add_argument('--num_inspect_pointclouds', type=int, default=3)
 args = parser.parse_args()
 seed_all(args.seed)
@@ -100,7 +100,7 @@ skip_checkpoint = args.skip_checkpoint
 
 # Logging
 if args.logging:
-    log_dir = Path(get_new_log_dir(args.log_root, prefix='LEGEN_', postfix='_' + args.tag if args.tag is not None else ''))
+    log_dir = Path(get_new_log_dir(args.log_root, prefix='LEGEN_', postfix='_' + args.tag if args.tag != "" else ''))
     logger = get_logger('train', str(log_dir))
     writer = torch.utils.tensorboard.SummaryWriter(str(log_dir))
     ckpt_mgr = CheckpointManager(str(log_dir))
@@ -191,7 +191,7 @@ def save_render(path, it, ind, title, data):
     ax.set_box_aspect((np.ptp(data[:, 0]), np.ptp(data[:, 1]), np.ptp(data[:, 2])))
     #fig.tight_layout()
     ax.set_title(title.format(it=it, ind=ind))
-    plt.savefig(str(path / title.format(it=it, ind=ind)))
+    plt.savefig(str(path / title.format(it=it, ind=ind)).replace(": ", "_"))
     plt.close(fig)
 # Train, validate
 loss_store = []
@@ -224,13 +224,14 @@ def train(it):
     # writer.add_scalar('train/grad_norm', orig_grad_norm, it)
     writer.flush()
     if args.log_data and (it % args.val_freq == 0 or it == args.max_iters):
+        tag = ": " + args.tag if args.tag != "" else ""
         global epi_loss_store
         global epi_iters
         epi_iters.append(it)
         epi_loss_store.append(np.mean(loss_store))
         loss_store = []
         plt.plot(epi_iters, epi_loss_store)
-        plt.title("Train Loss")
+        plt.title("Train Loss" + tag)
         plt.xlabel("Train Iteration")
         plt.ylabel("Loss")
         plt.savefig(log_dir / "figures" / "TRAIN_LOSS.png")
@@ -241,10 +242,11 @@ def train(it):
         all_textcons = model.decode(model.encode_text(x), args.gen_sample_num_points).detach()
         all_pccons = model.decode(model.encode_pc(batch_pcs), args.gen_sample_num_points).detach()
         all_refscons = batch_pcs.detach()
+
         for i in range(args.num_inspect_pointclouds):
-            save_render(log_dir / "figures", it, i, "TRAIN_REF{it}_{ind}", all_refscons[i, :, :].cpu().detach().numpy())
-            save_render(log_dir / "figures", it, i, "TRAIN_PC{it}_{ind}", all_pccons[i, :, :].cpu().detach().numpy())
-            save_render(log_dir / "figures", it, i, "TRAIN_TEXT{it}_{ind}", all_textcons[i, :, :].cpu().detach().numpy())
+            save_render(log_dir / "figures", it, i, "TRAIN_REF{it}_{ind}" + tag, all_refscons[i, :, :].cpu().detach().numpy())
+            save_render(log_dir / "figures", it, i, "TRAIN_PC{it}_{ind}" + tag, all_pccons[i, :, :].cpu().detach().numpy())
+            save_render(log_dir / "figures", it, i, "TRAIN_TEXT{it}_{ind}" + tag, all_textcons[i, :, :].cpu().detach().numpy())
 val_iters = []
 text_cds = []
 pc_cds = []
@@ -281,23 +283,24 @@ def validate_loss(it):
     if (args.log_data):
         codes_pc = torch.cat(codes_pc, dim=0)
         codes_text = torch.cat(codes_text, dim=0)
+    tag = ": " + args.tag if args.tag != "" else ""
     if (args.log_data):
         pca = PCA().fit(codes_pc.cpu().detach().numpy())
         plt.plot(np.cumsum(pca.explained_variance_ratio_))
-        plt.title("PC PCA{it}".format(it=it))
+        plt.title("PC PCA{it}".format(it=it) + tag)
         plt.savefig(log_dir / "figures" / "PC_PCA{it}.png".format(it=it))
         plt.close()
         pca = PCA().fit(codes_text.cpu().detach().numpy())
         plt.plot(np.cumsum(pca.explained_variance_ratio_))
-        plt.title("TEXT PCA{it}".format(it=it))
+        plt.title("TEXT PCA{it}".format(it=it) + tag)
         plt.savefig(log_dir / "figures" / "TEXT_PCA{it}.png".format(it=it))
         plt.close()
     text_metrics = EMD_CD(all_textcons, all_refscons, batch_size=args.val_batch_size)
     for i in range(args.num_inspect_pointclouds):
         if (it == args.val_freq):
-            save_render(log_dir / "figures", it, i, "REF{it}_{ind}", all_refscons[i, :, :].cpu().detach().numpy())
-        save_render(log_dir / "figures", it, i, "PC{it}_{ind}", all_pccons[i, :, :].cpu().detach().numpy())
-        save_render(log_dir / "figures", it, i, "TEXT{it}_{ind}", all_textcons[i, :, :].cpu().detach().numpy())
+            save_render(log_dir / "figures", it, i, "REF{it}_{ind}" + tag, all_refscons[i, :, :].cpu().detach().numpy())
+        save_render(log_dir / "figures", it, i, "PC{it}_{ind}" + tag, all_pccons[i, :, :].cpu().detach().numpy())
+        save_render(log_dir / "figures", it, i, "TEXT{it}_{ind}" + tag, all_textcons[i, :, :].cpu().detach().numpy())
     text_cd, text_emd = text_metrics['MMD-CD'].item(), text_metrics['MMD-EMD'].item()
     text_cds.append(text_cd)
     pc_metrics = EMD_CD(all_pccons, all_refscons, batch_size=args.val_batch_size)
@@ -306,13 +309,13 @@ def validate_loss(it):
         pc_cds.append(pc_cd)
         val_iters.append(it)
         plt.plot(val_iters, text_cds)
-        plt.title("Text Val CD")
+        plt.title("Text Val CD" + tag)
         plt.xlabel("Val Iteration")
         plt.ylabel("CD")
         plt.savefig(log_dir / "figures" / "TEXT_VAL_CD.png")
         plt.close()
         plt.plot(val_iters, pc_cds)
-        plt.title("PC Val CD")
+        plt.title("PC Val CD" + tag)
         plt.xlabel("Val Iteration")
         plt.ylabel("CD")
         plt.savefig(log_dir / "figures" / "PC_VAL_CD.png")
