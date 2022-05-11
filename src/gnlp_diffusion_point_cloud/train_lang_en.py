@@ -111,6 +111,11 @@ else:
 logger.info(args)
 if (args.log_data):
     os.mkdir(log_dir / 'figures')
+    os.mkdir(log_dir / 'figures' / "PCA")
+    os.mkdir(log_dir / 'figures' / "losses")
+    os.mkdir(log_dir / 'figures' / "train_renders")
+    os.mkdir(log_dir / 'figures' / "val_renders")
+    os.mkdir(log_dir / 'figures' / "val_metrics")
 # Model
 logger.info('Building model...')
 if args.resume is not None:
@@ -194,8 +199,8 @@ def save_render(path, it, ind, title, data):
     plt.savefig(str(path / title.format(it=it, ind=ind)).replace(": ", "_"))
     plt.close(fig)
 # Train, validate
-loss_store = []
-epi_loss_store = []
+loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[]}
+epi_loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[]}
 epi_iters = []
 
 def train(it):
@@ -209,7 +214,7 @@ def train(it):
     model.train()
 
     # Forward
-    loss = model.get_loss(x, batch_pcs, args.loss_weights)
+    loss, contrast_loss, text_loss, pc_loss = model.get_loss(x, batch_pcs, args.loss_weights, return_components=True)
     # Backward and optimize
     loss.backward()
     # orig_grad_norm = clip_grad_norm_(model.parameters(), args.max_grad_norm)
@@ -218,7 +223,10 @@ def train(it):
 
     logger.info('[Train] Iter %04d | Loss %.6f' % (it, loss.item()))
     if (args.log_data):
-        loss_store.append(loss.item())
+        loss_store["Sum"].append(loss.item())
+        loss_store["Contrast"].append(contrast_loss.item())
+        loss_store["Text"].append(text_loss.item())
+        loss_store["PC"].append(pc_loss.item())
     # writer.add_scalar('train/loss', loss, it)
     # writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], it)
     # writer.add_scalar('train/grad_norm', orig_grad_norm, it)
@@ -228,14 +236,17 @@ def train(it):
         global epi_loss_store
         global epi_iters
         epi_iters.append(it)
-        epi_loss_store.append(np.mean(loss_store))
-        loss_store = []
-        plt.plot(epi_iters, epi_loss_store)
-        plt.title("Train Loss" + tag)
-        plt.xlabel("Train Iteration")
-        plt.ylabel("Loss")
-        plt.savefig(log_dir / "figures" / "TRAIN_LOSS.png")
-        plt.close()
+
+
+        for loss_key in loss_store:
+            epi_loss_store[loss_key].append(np.mean(loss_store[loss_key]))
+            plt.plot(epi_iters, epi_loss_store[loss_key])
+            plt.title("{key} Train Loss".format(key=loss_key) + tag)
+            plt.xlabel("Train Iteration")
+            plt.ylabel("Mean Loss Over Last {freq} Iters".format(freq=args.val_freq))
+            plt.savefig(log_dir / "figures" / "losses" / "TRAIN_{key}_LOSS.png".format(key=loss_key.upper()))
+            plt.close()
+        loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[]}
         all_refscons = []
         all_pccons = []
         all_textcons = []
@@ -244,9 +255,9 @@ def train(it):
         all_refscons = batch_pcs.detach()
 
         for i in range(args.num_inspect_pointclouds):
-            save_render(log_dir / "figures", it, i, "TRAIN_REF{it}_{ind}" + tag, all_refscons[i, :, :].cpu().detach().numpy())
-            save_render(log_dir / "figures", it, i, "TRAIN_PC{it}_{ind}" + tag, all_pccons[i, :, :].cpu().detach().numpy())
-            save_render(log_dir / "figures", it, i, "TRAIN_TEXT{it}_{ind}" + tag, all_textcons[i, :, :].cpu().detach().numpy())
+            save_render(log_dir / "figures" / "train_renders", it, i, "TRAIN_REF{it}_{ind}" + tag, all_refscons[i, :, :].cpu().detach().numpy())
+            save_render(log_dir / "figures" / "train_renders", it, i, "TRAIN_PC{it}_{ind}" + tag, all_pccons[i, :, :].cpu().detach().numpy())
+            save_render(log_dir / "figures" / "train_renders", it, i, "TRAIN_TEXT{it}_{ind}" + tag, all_textcons[i, :, :].cpu().detach().numpy())
 val_iters = []
 text_cds = []
 pc_cds = []
@@ -288,19 +299,19 @@ def validate_loss(it):
         pca = PCA().fit(codes_pc.cpu().detach().numpy())
         plt.plot(np.cumsum(pca.explained_variance_ratio_))
         plt.title("PC PCA{it}".format(it=it) + tag)
-        plt.savefig(log_dir / "figures" / "PC_PCA{it}.png".format(it=it))
+        plt.savefig(log_dir / "figures" / "PCA" / "PC_PCA{it}.png".format(it=it))
         plt.close()
         pca = PCA().fit(codes_text.cpu().detach().numpy())
         plt.plot(np.cumsum(pca.explained_variance_ratio_))
         plt.title("TEXT PCA{it}".format(it=it) + tag)
-        plt.savefig(log_dir / "figures" / "TEXT_PCA{it}.png".format(it=it))
+        plt.savefig(log_dir / "figures" / "PCA" / "TEXT_PCA{it}.png".format(it=it))
         plt.close()
     text_metrics = EMD_CD(all_textcons, all_refscons, batch_size=args.val_batch_size)
     for i in range(args.num_inspect_pointclouds):
         if (it == args.val_freq):
-            save_render(log_dir / "figures", it, i, "REF{it}_{ind}" + tag, all_refscons[i, :, :].cpu().detach().numpy())
-        save_render(log_dir / "figures", it, i, "PC{it}_{ind}" + tag, all_pccons[i, :, :].cpu().detach().numpy())
-        save_render(log_dir / "figures", it, i, "TEXT{it}_{ind}" + tag, all_textcons[i, :, :].cpu().detach().numpy())
+            save_render(log_dir / "figures" / "val_renders", it, i, "REF{it}_{ind}" + tag, all_refscons[i, :, :].cpu().detach().numpy())
+        save_render(log_dir / "figures" / "val_renders", it, i, "PC{it}_{ind}" + tag, all_pccons[i, :, :].cpu().detach().numpy())
+        save_render(log_dir / "figures" / "val_renders", it, i, "TEXT{it}_{ind}" + tag, all_textcons[i, :, :].cpu().detach().numpy())
     text_cd, text_emd = text_metrics['MMD-CD'].item(), text_metrics['MMD-EMD'].item()
     text_cds.append(text_cd)
     pc_metrics = EMD_CD(all_pccons, all_refscons, batch_size=args.val_batch_size)
@@ -312,13 +323,13 @@ def validate_loss(it):
         plt.title("Text Val CD" + tag)
         plt.xlabel("Val Iteration")
         plt.ylabel("CD")
-        plt.savefig(log_dir / "figures" / "TEXT_VAL_CD.png")
+        plt.savefig(log_dir / "figures" / "val_metrics" / "TEXT_VAL_CD.png")
         plt.close()
         plt.plot(val_iters, pc_cds)
         plt.title("PC Val CD" + tag)
         plt.xlabel("Val Iteration")
         plt.ylabel("CD")
-        plt.savefig(log_dir / "figures" / "PC_VAL_CD.png")
+        plt.savefig(log_dir / "figures" / "val_metrics" / "PC_VAL_CD.png")
         plt.close()
     logger.info('[Val] Iter %04d | TEXT_CD %.6f | PC_CD %.6f  ' % (it, text_cd, pc_cd))
     # writer.add_scalar('val/mod_cd', mod_cd, it)
