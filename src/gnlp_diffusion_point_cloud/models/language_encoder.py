@@ -56,48 +56,50 @@ class LanguageEncoder(nn.Module):
             self,
             backbone: str = "T5",
             encoder: str = "CNN2FF",
-            loss: str = "MSE",
+            losses: List[str] = ("MSE"),
             *args,
             **kwargs
     ):
         super().__init__()
         self.backbone_type = backbone
         self.encoder_type = encoder
-        self.loss_type = loss
+        self.loss_types = losses
 
         self.backbone = __back_bones__[self.backbone_type](*args, **kwargs)
         for param in self.backbone.parameters():
             param.requires_grad = not kwargs["backbone_freeze"]
         self.encoder = __encoders__[self.encoder_type](*args, **kwargs)
 
-        if self.loss_type == 'ContrastiveLoss':
-            self.loss = __losses__[self.loss_type](*args, **kwargs)
-        elif self.loss_type == "DiffusionMSE":
-            self.loss = __losses__[self.loss_type](
-                net = PointwiseNet(point_dim=3, context_dim=kwargs["latent_dim"], residual=kwargs["residual"]),
-                var_sched = VarianceSchedule(
-                    num_steps=kwargs["num_steps"],
-                    beta_1=kwargs["beta_1"],
-                    beta_T=kwargs["beta_T"],
-                    mode=kwargs["sched_mode"]
+        self.losses = {}
+        for loss in self.loss_types:
+            if loss == 'ContrastiveLoss':
+                self.losses['ContrastiveLoss'] = __losses__[self.loss_type](*args, **kwargs)
+            elif loss == 'DiffusionMSE':
+                self.losses['DiffusionMSE'] = __losses__[self.loss_type](
+                    net = PointwiseNet(point_dim=3, context_dim=kwargs["latent_dim"], residual=kwargs["residual"]),
+                    var_sched = VarianceSchedule(
+                        num_steps=kwargs["num_steps"],
+                        beta_1=kwargs["beta_1"],
+                        beta_T=kwargs["beta_T"],
+                        mode=kwargs["sched_mode"]
+                    )
                 )
-            )
-        elif self.loss_type == "DiffusionGenMSE":
-            pass  # This loss is specific to the generation model used during validation/cached embeddings curation.
-        else:
-            self.loss = __losses__[self.loss_type]()
+            elif loss == "DiffusionGenMSE":
+                pass
+            else:
+                self.losses[loss] = __losses__[loss]()
 
     def encode(self, x):
         return self.encoder(self.backbone(x))
 
-    def get_loss(self, x, y, *args, pcs=None, targets=None, gen_model=None, **kwargs):
-        if self.loss_type == "ContrastiveLoss":
-            return self.loss(self.encode(x), y, *args, **kwargs)
-        if self.loss_type == "ContrastiveCos":
-            return self.loss(self.encode(x), y, targets)
-        if self.loss_type == "DiffusionMSE":
-            return self.loss.get_loss(pcs, self.encode(x))
-        if self.loss_type == "DiffusionGenMSE":
+    def get_loss(self, loss_type, x, y, *args, pcs=None, targets=None, gen_model=None, **kwargs):
+        if loss_type == "ContrastiveLoss":
+            return self.losses[loss_type](self.encode(x), y, *args, **kwargs)
+        if loss_type == "ContrastiveCos":
+            return self.losses[loss_type](self.encode(x), y, targets)
+        if loss_type == "DiffusionMSE":
+            return self.losses[loss_type].get_loss(pcs, self.encode(x))
+        if loss_type == "DiffusionGenMSE":
             return gen_model.diffusion.get_loss(pcs, self.encode(x))
         else:
-            return self.loss(self.encode(x), y)
+            return self.losses[loss_type](self.encode(x), y)

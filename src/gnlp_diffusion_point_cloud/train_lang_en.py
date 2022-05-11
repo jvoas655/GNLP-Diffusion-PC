@@ -30,7 +30,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--backbone', type=str, default="T5", choices=["T5", "SIMPLE"])
 parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
-parser.add_argument('--losses', nargs='+', type=str, default="DiffusionMSE",
+parser.add_argument('--losses', nargs='+', type=str, default=["DiffusionMSE"],
                     choices=["MSE", "ContrastiveCos", "ContrastiveLoss", "DiffusionMSE", "DiffusionGenMSE"]
                     )
 parser.add_argument('--loss_weights', nargs='+', type=float, default=[1.0],
@@ -178,6 +178,7 @@ train_iter = get_data_iterator(DataLoader(
     train_dset,
     batch_size=args.train_batch_size,
     num_workers=0,
+    shuffle=False
 ))
 
 if args.use_train_as_validation:
@@ -185,6 +186,7 @@ if args.use_train_as_validation:
     train_dset,
     batch_size=args.train_batch_size,
     num_workers=0,
+    shuffle=False
 )
 else:
     val_loader = DataLoader(val_dset, batch_size=args.val_batch_size, num_workers=0)
@@ -201,6 +203,8 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
     milestones=[args.sched_start_epoch for offset in range(0, args.sched_end_epoch - args.sched_start_epoch, steps)],
     gamma=(args.end_lr / args.lr) ** (1/10)
 )
+
+train_dset[0]
 
 # Train, validate
 def train(it):
@@ -227,20 +231,20 @@ def train(it):
     losses = []
     for loss in args.losses:
         if loss == "DiffusionMSE":
-            losses.append(model.get_loss(x, y, pcs=batch_pcs))
+            losses.append(model.get_loss(loss, x, y, pcs=batch_pcs))
         elif loss == "ContrastiveCos":
-            losses.append(model.get_loss(x, y, targets=targets))
+            losses.append(model.get_loss(loss, x, y, targets=targets))
         elif loss == "DiffusionGenMSE":
-            losses.append(model.get_loss(x, y, pcs=batch_pcs, gen_model=gen_model))
+            losses.append(model.get_loss(loss, x, y, pcs=batch_pcs, gen_model=gen_model))
         else:
-            losses.append(model.get_loss(x, y))
+            losses.append(model.get_loss(loss, x, y))
 
     loss_weights = args.loss_weights
     if len(loss_weights) == 1:
         loss_weights = [loss_weights[0]] * len(losses)
 
     # Backward and optimize
-    [(x * loss_weights[idx]).backward() for idx, x in enumerate(losses)]
+    [(loss * loss_weights[idx]).backward() for idx, loss in enumerate(losses)]
     # orig_grad_norm = clip_grad_norm_(model.parameters(), args.max_grad_norm)
     optimizer.step()
     scheduler.step()
@@ -268,7 +272,7 @@ def validate_loss(it):
             # gen_model.eval()
             # seed = torch.seed()
             #if (args.val_type == "CDEmbeddings"):
-            all_embcons.append(gen_model.sample(ref_embeddings, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
+            # all_embcons.append(gen_model.sample(ref_embeddings, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
             # torch.manual_seed(seed)
             #elif (args.val_type == "CDTruePC"):
             all_modcons.append(gen_model.sample(code, args.gen_sample_num_points, flexibility=args.gen_flexibility).detach())
@@ -276,13 +280,15 @@ def validate_loss(it):
 
     all_refscons = torch.cat(all_refscons, dim=0)
     all_modcons = torch.cat(all_modcons, dim=0)
-    all_embcons = torch.cat(all_embcons, dim=0)
+    # all_embcons = torch.cat(all_embcons, dim=0)
     mod_metrics = EMD_CD(all_modcons, all_refscons, batch_size=args.val_batch_size)
-    mod_cd, mod_emd = mod_metrics['MMD-CD'].item(), mod_metrics['MMD-EMD'].item()
-    emb_metrics = EMD_CD(all_embcons, all_refscons, batch_size=args.val_batch_size)
-    emb_cd, emb_emd = emb_metrics['MMD-CD'].item(), emb_metrics['MMD-EMD'].item()
+    # mod_metrics = EMD_CD(all_refscons, all_refscons, batch_size=args.val_batch_size)
 
-    logger.info('[Val] Iter %04d | MOD_CD %.6f | EMB_CD %.6f  ' % (it, mod_cd, emb_cd))
+    mod_cd, mod_emd = mod_metrics['MMD-CD'].item(), mod_metrics['MMD-EMD'].item()
+    # emb_metrics = EMD_CD(all_embcons, all_refscons, batch_size=args.val_batch_size)
+    # emb_cd, emb_emd = emb_metrics['MMD-CD'].item(), emb_metrics['MMD-EMD'].item()
+
+    logger.info('[Val] Iter %04d | MOD_CD %.6f ' % (it, mod_cd))
     # writer.add_scalar('val/mod_cd', mod_cd, it)
     # writer.add_scalar('val/emb_cd', emb_cd, it)
     writer.flush()
@@ -321,7 +327,7 @@ try:
         if it % args.val_freq == 0 or it == args.max_iters:
             with torch.no_grad():
                 cd_loss = validate_loss(it)
-                validate_inspect(it)
+                # validate_inspect(it)
             opt_states = {
                 'optimizer': optimizer.state_dict(),
                 'scheduler': scheduler.state_dict(),
