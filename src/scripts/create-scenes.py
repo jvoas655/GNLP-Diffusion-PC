@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 import nltk
 import random
 
-#from utilities.paths import DATA_FOLDER
-DATA_FOLDER = Path("C:\\Users\\Jorda\\Documents\\School\\Spring2022\\CS395T\\Project\\Dup\\GNLP-Diffusion-PC\\src\\data")
+from utilities.paths import DATA_FOLDER
+#DATA_FOLDER = Path("C:\\Users\\Jorda\\Documents\\School\\Spring2022\\CS395T\\Project\\Dup\\GNLP-Diffusion-PC\\src\\data")
 
 synsetid_to_cate = {
     '02691156': 'airplane', '02773838': 'bag', '02801938': 'basket',
@@ -57,7 +57,7 @@ def gen_scene(args, text, pc):
     # Select object modifiers
     roll = random.random()
     tip_overs = ["left side", "back side", "front side", "right side", "feet"]
-    if (roll < 0.02):
+    if (roll < args.roll_chance):
         base_strs = ["{obj} laying on it {side}"]
         tip = random.choice(tip_overs)
         sent_1 = random.choice(base_strs).format(obj=sent_1, side=tip)
@@ -91,7 +91,7 @@ def gen_scene(args, text, pc):
     data_2 = pc[cate_to_synsetid[cate_2]][obj_2_ind, :, :]
     roll = random.random()
     tip_overs = ["left side", "back side", "front side", "right side", "feet"]
-    if (roll < 0.02):
+    if (roll < args.roll_chance):
         base_strs = ["{obj} laying on it {side}"]
         tip = random.choice(tip_overs)
         sent_2 = random.choice(base_strs).format(obj=sent_2, side=tip)
@@ -126,14 +126,16 @@ def gen_scene(args, text, pc):
 
 
     # Select combining method
-    roll = random.random()
+    probs = np.array([args.object_ref_weight, args.scene_ref_weight])
+    probs /= np.linalg.norm(probs)
+    roll = np.argmax(np.random.multinomial(1, probs))
     segments = ["center", "right", "lower right", "upper right", "bottom", "top", "left", "upper left", "lower left"]
     offsets = [(3, 3), (0, 3), (0, 6), (0, 0), (3, 6), (3, 0), (6, 3), (6, 0), (6, 6)]
     referential = ["slightly to the right of", "to the right of", \
         "slightly below", "below", "slightly above", \
         "above", "slightly to the left of", "to the left of"]
     referential_offsets = [(-0.5, 0), (-2, 0), (0, 0.5), (0, 2), (0, -0.5), (0, -2), (0.5, 0), (2, 0)]
-    if (roll < 1):
+    if (roll == 0):
         pos = 0
         ref = random.randint(0, len(referential)-1)
         base_strs = ["A {obj_2} is {dist} a {obj_1}"]
@@ -161,12 +163,12 @@ def gen_scene(args, text, pc):
             fused_data = np.concatenate((floor, fused_data))
         fused_data[:, 0] -= 5
         fused_data[:, 2] -= 5
-    else:
+    elif (roll == 1):
         # Scene referential
         pos1 = random.randint(0, len(segments)-1)
         pos2 = random.randint(0, len(segments)-1)
         while (pos2 == pos1):
-            pos2 = random.randint(0, len(segments))
+            pos2 = random.randint(0, len(segments)-1)
         base_strs = ["A {obj_1} is in the {obj_1_pos} of the room with a {obj_2} in the {obj_2_pos}",\
                     "A {obj_1} is placed near the {obj_1_pos} of the room with a {obj_2} to the {obj_2_pos}"]
         defn_str = random.choice(base_strs).format(obj_1 = sent_1, obj_1_pos = segments[pos1], obj_2 = sent_2, obj_2_pos = segments[pos2])
@@ -220,8 +222,17 @@ if __name__ == "__main__":
                            default=16)
     argparser.add_argument('--inspect',
                            help='',
-                           default=True,
+                           default=False,
                            action = "store_true")
+    argparser.add_argument('--roll_chance', type=float,
+                           help='',
+                           default=0.02)
+    argparser.add_argument('--object_ref_weight', type=float,
+                           help='',
+                           default=0.5)
+    argparser.add_argument('--scene_ref_weight', type=float,
+                           help='',
+                           default=0.5)
 
     args = argparser.parse_args()
 
