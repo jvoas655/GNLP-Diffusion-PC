@@ -51,7 +51,7 @@ def display(title, data):
 def gen_scene(args, text, pc):
     # pick two objects randomly
     cate_1 = random.choice(["chair", "table"])
-    obj_1_ind = random.randint(0, text[cate_to_synsetid[cate_1]].shape[0])
+    obj_1_ind = random.randint(0, text[cate_to_synsetid[cate_1]].shape[0]-1)
     sent_1 = text[cate_to_synsetid[cate_1]][obj_1_ind]
     data_1 = pc[cate_to_synsetid[cate_1]][obj_1_ind, :, :]
     # Select object modifiers
@@ -86,7 +86,7 @@ def gen_scene(args, text, pc):
 
 
     cate_2 = random.choice(["chair", "table"])
-    obj_2_ind = random.randint(0, text[cate_to_synsetid[cate_2]].shape[0])
+    obj_2_ind = random.randint(0, text[cate_to_synsetid[cate_2]].shape[0]-1)
     sent_2 = text[cate_to_synsetid[cate_2]][obj_2_ind]
     data_2 = pc[cate_to_synsetid[cate_2]][obj_2_ind, :, :]
     roll = random.random()
