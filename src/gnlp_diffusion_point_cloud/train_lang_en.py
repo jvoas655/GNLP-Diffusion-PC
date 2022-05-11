@@ -37,6 +37,7 @@ parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", 
 parser.add_argument('--loss_weights', nargs='+', type=float, default=[0.5, 1.0, 0.5],
                     help='When multiple losses are chosen, you can specify how much impact each loss has by passing in'
                          ' a weight value for each loss in order of the losses specified by --losses')
+parser.add_argument('--contrast_temp', type=float, default=0.5)
 parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=64)
 parser.add_argument('--token_length', type=int, default=64)

@@ -75,6 +75,7 @@ class FullEncoderDecoder(nn.Module):
                 mode=args.sched_mode
             )
         )
+        self.contrast_loss = ContrastiveLoss(negative_temperature = args.contrast_temp)
 
     def encode_text(self, tokens):
         return self.text_encoder(self.backbone(tokens))
@@ -85,7 +86,7 @@ class FullEncoderDecoder(nn.Module):
     def get_loss(self, tokens, pc, weight = [1.0, 1.0, 1.0]):
         code_text = self.encode_text(tokens)
         code_pc = self.encode_pc(pc)
-        contrast_loss = ContrastiveLoss()(code_text, code_pc)
+        contrast_loss = self.contrast_loss(code_text, code_pc)
         text_loss = self.decoder.get_loss(pc, code_text)
         pc_loss = self.decoder.get_loss(pc, code_pc)
         return weight[0] * contrast_loss + weight[1] * text_loss + weight[2] * pc_loss
