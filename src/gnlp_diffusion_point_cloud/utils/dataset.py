@@ -153,7 +153,7 @@ class NLShapeNetCoreEmbeddings(Dataset):
                 token_vecs.append(self.token_vectors[i])
             self.token_vectors = token_vecs
         else:
-            self.token_vectors = np.squeeze(self.token_vectors.detach().numpy()[shuffle_inds, :], axis=0)
+            self.token_vectors = self.token_vectors.detach().numpy()[shuffle_inds, :]
         self.descriptions = self.descriptions[shuffle_inds]
         self.embeddings = self.embeddings[shuffle_inds, :]
         self.pcs = self.pcs[shuffle_inds, :, :]
@@ -171,11 +171,11 @@ class NLShapeNetCoreEmbeddings(Dataset):
         return self.descriptions.shape[0]
 
     def __getitem__(self, idx):
-        if self.multi_description_sample_method == 'sample':
+        if self.multi_description_per_object and self.multi_description_sample_method == 'sample':
             descrip_idx = np.random.choice(range(0, len(self.token_vectors[idx])))
             tokens = self.token_vectors[idx][descrip_idx]
             return tokens, self.embeddings[idx, :], self.pcs[idx, :, :]
-        elif self.multi_description_sample_method == 'combined':
+        elif self.multi_description_per_object and self.multi_description_sample_method == 'combined':
             return self.token_vectors[idx], self.embeddings[idx, :], self.pcs[idx, :, :]
         else:
             return self.token_vectors[idx, :], self.embeddings[idx, :], self.pcs[idx, :, :]

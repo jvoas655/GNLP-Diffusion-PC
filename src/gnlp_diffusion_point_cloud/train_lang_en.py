@@ -202,8 +202,6 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
     gamma=(args.end_lr / args.lr) ** (1/10)
 )
 
-train_dset[0]
-
 # Train, validate
 def train(it):
     # Load data
@@ -291,6 +289,7 @@ def validate_loss(it):
 
     if visualize:
         save_pc_drawing(all_modcons.detach().cpu().numpy(), "Models")
+        save_pc_drawing(all_refscons.detach().cpu().numpy(), "Models", './gold.png')
 
     return mod_cd
 
