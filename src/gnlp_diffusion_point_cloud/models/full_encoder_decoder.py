@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from typing import Dict, ClassVar
 
+from diffusion_point_cloud.models.diffusion import DiffusionPoint
+from diffusion_point_cloud.models.encoders.pointnet import PointNetEncoder
 from models.backbones.backbone import Backbone
 from models.backbones.t5 import T5Backbone
 from models.backbones.simple import SimpleBackbone
@@ -35,7 +37,7 @@ __losses__: Dict[str, 'ClassVar[Module]'] = {
 }
 
 
-class LanguageEncoder(nn.Module):
+class FullEncoderDecoder(nn.Module):
     """
     The langauge encoding model
 
@@ -53,47 +55,37 @@ class LanguageEncoder(nn.Module):
 
     def __init__(
             self,
-            backbone: str = "T5",
-            encoder: str = "CNN2FF",
-            loss: str = "MSE",
-            *args,
-            **kwargs
+            args
     ):
         super().__init__()
-        self.backbone_type = backbone
-        self.encoder_type = encoder
-        self.loss_types = loss
-
-        self.backbone = __back_bones__[self.backbone_type](*args, **kwargs)
+        self.args = args
+        self.backbone_type = args.backbone
+        self.encoder_type = args.encoder
+        self.pc_encoder = PointNetEncoder(zdim=args.latent_dim)
+        self.backbone = __back_bones__[self.backbone_type](args.size)
         for param in self.backbone.parameters():
-            param.requires_grad = not kwargs["backbone_freeze"]
-        self.encoder = __encoders__[self.encoder_type](*args, **kwargs)
-
-
-        self.ContrastiveLoss = __losses__["ContrastiveLoss"](*args, **kwargs)
-
-        self.DiffusionMSE = __losses__["DiffusionMSE"](
-            net = PointwiseNet(point_dim=3, context_dim=kwargs["latent_dim"], residual=kwargs["residual"]),
+            param.requires_grad = not args.backbone_freeze
+        self.text_encoder = __encoders__[self.encoder_type](latent_dim=args.latent_dim)
+        self.decoder = DiffusionPoint(
+            net = PointwiseNet(point_dim=3, context_dim=args.latent_dim, residual=args.residual),
             var_sched = VarianceSchedule(
-                num_steps=kwargs["num_steps"],
-                beta_1=kwargs["beta_1"],
-                beta_T=kwargs["beta_T"],
-                mode=kwargs["sched_mode"]
+                num_steps=args.num_steps,
+                beta_1=args.beta_1,
+                beta_T=args.beta_T,
+                mode=args.sched_mode
             )
         )
-        self.MSE = __losses__["MSE"]()
 
-    def encode(self, x):
-        return self.encoder(self.backbone(x))
-
-    def get_loss(self, x, y, type, *args, pcs=None, targets=None, gen_model=None, **kwargs):
-        if type == "ContrastiveLoss":
-            return self.ContrastiveLoss(self.encode(x), y, *args, **kwargs)
-        if type == "ContrastiveCos":
-            return self.loss(self.encode(x), y, targets)
-        if type == "DiffusionMSE":
-            return self.DiffusionMSE.get_loss(pcs, self.encode(x))
-        if type == "DiffusionGenMSE":
-            return gen_model.get_loss(pcs, self.encode(x))
-        if type == "MSE":
-            return self.MSE(self.encode(x), y)
+    def encode_text(self, tokens):
+        return self.text_encoder(self.backbone(tokens))
+    def encode_pc(self, pc):
+        return self.pc_encoder(pc)[0]
+    def decode(self, code, points):
+        return self.decoder.sample(points, code)
+    def get_loss(self, tokens, pc, weight = [1.0, 1.0, 1.0]):
+        code_text = self.encode_text(tokens)
+        code_pc = self.encode_pc(pc)
+        contrast_loss = ContrastiveLoss()(code_text, code_pc)
+        text_loss = self.decoder.get_loss(pc, code_text)
+        pc_loss = self.decoder.get_loss(pc, code_pc)
+        return weight[0] * contrast_loss + weight[1] * text_loss + weight[2] * pc_loss

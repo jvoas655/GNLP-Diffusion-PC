@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from pathlib import Path
 
-from utilities.paths import DATA_FOLDER
+DATA_FOLDER = Path("C:\\Users\\Jorda\\Documents\\School\\Spring2022\\CS395T\\Project\\Dup\\GNLP-Diffusion-PC\\src\\data")
 
 synsetid_to_cate = {
     '02691156': 'airplane', '02773838': 'bag', '02801938': 'basket',
@@ -33,12 +33,11 @@ synsetid_to_cate = {
 cate_to_synsetid = {v: k for k, v in synsetid_to_cate.items()}
 
 
-class NLShapeNetCoreEmbeddings(Dataset):
+class NLShapeNetCore(Dataset):
 
     def __init__(
             self,
             desc_path,
-            embedding_path,
             pc_path,
             tokenizer,
             token_length,
@@ -53,35 +52,37 @@ class NLShapeNetCoreEmbeddings(Dataset):
         super().__init__()
         assert isinstance(cates, list), '`cates` must be a list of cate names.'
         assert split in ('train', 'val', 'test')
-        assert scale_mode is None or scale_mode in ('global_unit', 'shape_unit', 'shape_bbox', 'shape_half', 'shape_34')
+        assert scale_mode is None or scale_mode in ('global_unit', 'shape_unit', 'shape_bbox', 'shape_half', 'shape_34', "none")
         self.scale_mode = scale_mode
         self.token_length = token_length
         self.desc_path = desc_path
-        self.embedding_path = embedding_path
         self.pc_path = pc_path
         self.tokenizer = tokenizer
         if 'all' in cates:
             cates = cate_to_synsetid.keys()
-        self.cate_synsetids = [cate_to_synsetid[s] for s in cates]
-        self.cate_synsetids.sort()
+        self.cates = cates
+        self.multi_description_per_object = multi_description_per_object
+        self.multi_description_sample_method = multi_description_sample_method
+        if not ("scenes" in cates):
+            self.cate_synsetids = [cate_to_synsetid[s] for s in cates]
+            self.cate_synsetids.sort()
+        else:
+            assert not self.multi_description_per_object
         self.split = split
         self.transform = transform
         self.stats = None
 
-        self.multi_description_per_object = multi_description_per_object
-        self.multi_description_sample_method = multi_description_sample_method
+
 
         # The size of the dataset, -1 means the entire dataset, if you want to run experiments on small sets for
         # convergence testing etc. set this to a low value.
         self.size = size
 
         self.descriptions = []
-        self.embeddings = []
         self.token_vectors = []
         self.get_statistics()
         self.load()
 
-        assert len(self.descriptions) == len(self.embeddings), 'number of descriptions does NOT match number of pcs.'
 
         self.transform = transform
     def get_statistics(self):
@@ -89,25 +90,24 @@ class NLShapeNetCoreEmbeddings(Dataset):
 
     def load(self):
         text_data_file = h5py.File(self.desc_path)
-        cached_embeddings_file = h5py.File(self.embedding_path)
         pc_file = h5py.File(self.pc_path)
         encoding = 'utf-8'
-        self.embeddings = None
         self.pcs = None
-        for synsetid in self.cate_synsetids:
-            for j, desc in enumerate(text_data_file[synsetid][self.split]):
-                if self.multi_description_per_object:
-                    self.descriptions.append(desc.decode(encoding).split('|||'))
+        if not ("scenes" in self.cates):
+            for synsetid in self.cate_synsetids:
+                for j, desc in enumerate(text_data_file[synsetid][self.split]):
+                    if self.multi_description_per_object:
+                        self.descriptions.append(desc.decode(encoding).split('|||'))
+                    else:
+                        self.descriptions.append(desc.decode(encoding))
+                if (isinstance(self.pcs, np.ndarray)):
+                    self.pcs = np.append(self.pcs, pc_file[synsetid][self.split][()], axis=0)
                 else:
+                    self.pcs = pc_file[synsetid][self.split][()]
+        else:
+            for j, desc in enumerate(text_data_file[self.split]):
                     self.descriptions.append(desc.decode(encoding))
-            if (isinstance(self.embeddings, np.ndarray)):
-                self.embeddings = np.append(self.embeddings, cached_embeddings_file[synsetid][self.split][()], axis=0)
-            else:
-                self.embeddings = cached_embeddings_file[synsetid][self.split][()]
-            if (isinstance(self.pcs, np.ndarray)):
-                self.pcs = np.append(self.pcs, pc_file[synsetid][self.split][()], axis=0)
-            else:
-                self.pcs = pc_file[synsetid][self.split][()]
+            self.pcs = pc_file[self.split][()]
         for j, pc in enumerate(torch.Tensor(self.pcs)):
             if self.scale_mode == 'global_unit':
                 shift = pc.mean(dim=0).reshape(1, 3)
@@ -153,32 +153,27 @@ class NLShapeNetCoreEmbeddings(Dataset):
                 token_vecs.append(self.token_vectors[i])
             self.token_vectors = token_vecs
         else:
-            self.token_vectors = np.squeeze(self.token_vectors.detach().numpy()[shuffle_inds, :], axis=0)
+            self.token_vectors = self.token_vectors.detach().numpy()[shuffle_inds, :]
         self.descriptions = self.descriptions[shuffle_inds]
-        self.embeddings = self.embeddings[shuffle_inds, :]
         self.pcs = self.pcs[shuffle_inds, :, :]
-
         # Restrict the size of the dataset to the size parameter if it was supplied.
         if self.size > 0:
             # Max out the size of the dataset to whatever the actual size of the dataset is
             # (i.e. you can't size a size of 1 million with a dataset of thousands)
             self.token_vectors = self.token_vectors[0:min(len(self.token_vectors), self.size)]
+
             self.descriptions = self.descriptions[0:min(len(self.descriptions), self.size)]
-            self.embeddings = self.embeddings[0:min(len(self.embeddings), self.size)]
             self.pcs = self.pcs[0:min(len(self.pcs), self.size)]
 
     def __len__(self):
         return self.descriptions.shape[0]
 
     def __getitem__(self, idx):
-        if self.multi_description_sample_method == 'sample':
+        if (not self.multi_description_per_object):
+            return self.token_vectors[idx, :], self.pcs[idx, :, :]
+        elif self.multi_description_sample_method == 'sample':
             descrip_idx = np.random.choice(range(0, len(self.token_vectors[idx])))
             tokens = self.token_vectors[idx][descrip_idx]
-            return tokens, self.embeddings[idx, :], self.pcs[idx, :, :]
+            return tokens, self.pcs[idx, :, :]
         elif self.multi_description_sample_method == 'combined':
-            return self.token_vectors[idx], self.embeddings[idx, :], self.pcs[idx, :, :]
-        else:
-            return self.token_vectors[idx, :], self.embeddings[idx, :], self.pcs[idx, :, :]
-
-class NLShapeNetCoreJoint(Dataset):
-    pass # Will be a join contrastive learning algo
+            return self.token_vectors[idx], self.pcs[idx, :, :]
