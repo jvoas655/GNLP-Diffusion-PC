@@ -73,9 +73,9 @@ class LanguageEncoder(nn.Module):
         self.losses = {}
         for loss in self.loss_types:
             if loss == 'ContrastiveLoss':
-                self.losses['ContrastiveLoss'] = __losses__[self.loss_type](*args, **kwargs)
+                self.losses['ContrastiveLoss'] = __losses__[loss](*args, **kwargs)
             elif loss == 'DiffusionMSE':
-                self.losses['DiffusionMSE'] = __losses__[self.loss_type](
+                self.losses['DiffusionMSE'] = __losses__[loss](
                     net = PointwiseNet(point_dim=3, context_dim=kwargs["latent_dim"], residual=kwargs["residual"]),
                     var_sched = VarianceSchedule(
                         num_steps=kwargs["num_steps"],
