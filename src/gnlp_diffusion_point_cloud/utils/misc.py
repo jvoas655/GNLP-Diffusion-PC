@@ -55,7 +55,7 @@ class CheckpointManager(object):
             if ckpt['score'] <= best:
                 idx = i
                 best = ckpt['score']
-        return idx if idx >= 0 else None
+        return idx if idx >= 0 else None, best
         
     def get_latest_ckpt_idx(self):
         idx = -1
@@ -66,12 +66,19 @@ class CheckpointManager(object):
                 latest_it = ckpt['iteration']
         return idx if idx >= 0 else None
 
-    def save(self, model, args, score, others=None, step=None):
+    def save(self, model, args, score, others=None, step=None, only_if_best: bool = False):
 
-        if step is None:
+        if only_if_best:
+            fname = 'ckpt_best.pt'
+        elif step is None:
             fname = 'ckpt_%.6f_.pt' % float(score)
         else:
             fname = 'ckpt_%.6f_%d.pt' % (float(score), int(step))
+
+        has_best, best_score = self.get_best_ckpt_idx()
+        if only_if_best and has_best and best_score <= float(score):
+            return
+
         path = os.path.join(self.save_dir, fname)
 
         torch.save({

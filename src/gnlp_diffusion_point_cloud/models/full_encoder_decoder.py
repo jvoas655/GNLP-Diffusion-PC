@@ -76,6 +76,7 @@ class FullEncoderDecoder(nn.Module):
             )
         )
         self.contrast_loss = ContrastiveLoss(negative_temperature = args.contrast_temp)
+        self.l1_loss = torch.nn.SmoothL1Loss()
 
     def encode_text(self, tokens):
         return self.text_encoder(self.backbone(tokens))
@@ -83,13 +84,14 @@ class FullEncoderDecoder(nn.Module):
         return self.pc_encoder(pc)[0]
     def decode(self, code, points):
         return self.decoder.sample(points, code)
-    def get_loss(self, tokens, pc, weight = [1.0, 1.0, 1.0], return_components = True):
+    def get_loss(self, tokens, pc, weight = (1.0, 1.0, 1.0, 0.0), return_components = True):
         code_text = self.encode_text(tokens)
         code_pc = self.encode_pc(pc)
+        l1_loss = self.l1_loss(code_text, code_pc)
         contrast_loss = self.contrast_loss(code_text, code_pc)
         text_loss = self.decoder.get_loss(pc, code_text)
         pc_loss = self.decoder.get_loss(pc, code_pc)
-        sum_loss = weight[0] * contrast_loss + weight[1] * text_loss + weight[2] * pc_loss
+        sum_loss = weight[0] * contrast_loss + weight[1] * text_loss + weight[2] * pc_loss + weight[3] * l1_loss
         if (return_components):
             return sum_loss, contrast_loss, text_loss, pc_loss
         else:

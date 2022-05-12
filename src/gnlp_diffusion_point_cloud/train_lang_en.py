@@ -34,7 +34,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--backbone', type=str, default="T5", choices=["T5", "SIMPLE"])
 parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
-parser.add_argument('--loss_weights', nargs='+', type=float, default=[0.5, 1.0, 0.5],
+parser.add_argument('--loss_weights', nargs='+', type=float, default=[0.5, 1.0, 0.5, 0.0],
                     help='When multiple losses are chosen, you can specify how much impact each loss has by passing in'
                          ' a weight value for each loss in order of the losses specified by --losses')
 parser.add_argument('--contrast_temp', type=float, default=0.5)
@@ -72,7 +72,8 @@ parser.add_argument('--multi_description_sample_method', '-mdsm', choices=['samp
                     type=str, default='sample')
 parser.add_argument('--log_data', action='store_true',
                     help='', default=True)
-
+parser.add_argument('--only_save_best', action='store_true', dest='only_save_best',
+                    default=True, help="Checkpoint only the best scoring model")
 # Optimizer and scheduler
 parser.add_argument('--lr', type=float, default=1e-3)
 parser.add_argument('--weight_decay', type=float, default=0)
@@ -378,7 +379,7 @@ try:
             }
 
             if not skip_checkpoint:
-                ckpt_mgr.save(model, args, cd_loss, opt_states, step=it)
+                ckpt_mgr.save(model, args, cd_loss, opt_states, step=it, only_if_best=args.only_save_best)
         it += 1
 
 except KeyboardInterrupt:
