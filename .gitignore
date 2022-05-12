@@ -2,6 +2,7 @@
 .DS_Store
 /playgrounds
 /logs*
+src/gnlp_diffusion_point_cloud/logs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
