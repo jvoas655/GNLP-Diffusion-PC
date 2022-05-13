@@ -189,7 +189,11 @@ scheduler = torch.optim.lr_scheduler.MultiStepLR(
     gamma=(args.end_lr / args.lr) ** (1/10)
 )
 
-def save_render(path, it, ind, title, data):
+def save_render(path, it, ind, title, data, flip = True):
+    if (flip):
+        store = data[:, 1].copy()
+        data[:, 1] = data[:, 2]
+        data[:, 2] = store
     fig = plt.figure()
     ax = plt.subplot(1, 1, 1, projection="3d")
     ax.scatter(data[:, 0], data[:, 1], data[:, 2])
