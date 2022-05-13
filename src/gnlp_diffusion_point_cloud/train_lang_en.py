@@ -34,13 +34,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--size', type=str, default="small", choices=["small", "base", "large", "extra_large", "largest"])
 parser.add_argument('--backbone', type=str, default="T5", choices=["T5", "SIMPLE"])
 parser.add_argument('--encoder', type=str, default="CNN2FF", choices=["CNN2FF", "SIMPLE"])
-parser.add_argument('--loss_weights', nargs='+', type=float, default=[0.5, 1.0, 0.5, 0.0],
-                    help='When multiple losses are chosen, you can specify how much impact each loss has by passing in'
-                         ' a weight value for each loss in order of the losses specified by --losses')
+parser.add_argument('--loss_weights', nargs='+', type=float, default=[0.5, 1.0, 0.5, 0.5],
+                    help='Contrastiv, Text, PC, L1')
 parser.add_argument('--contrast_temp', type=float, default=0.5)
 parser.add_argument('--resume', type=str, default=None)
 parser.add_argument('--latent_dim', type=int, default=64)
-parser.add_argument('--token_length', type=int, default=64)
+parser.add_argument('--token_length', type=int, default=128)
 parser.add_argument('--dataset_size', '-ds', type=int, default=-1,
                     help='-1 means all dataset examples are used, anything higher will slice the dataset.')
 parser.add_argument('--use_train_as_validation', action='store_true', dest='use_train_as_validation', default=False,
@@ -49,18 +48,18 @@ parser.add_argument('--visualize', '-v', action='store_true', dest='visualize')
 parser.add_argument('--skip_checkpoint', action='store_true', dest='skip_checkpoint')
 
 # Datasets and loaders
-parser.add_argument('--lang_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_text_data.hdf5")
-parser.add_argument('--pc_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_pc_data.hdf5")
-parser.add_argument('--categories', type=str_list, default=["chair", "table"], help="all, chair, table, or scenes (alone)")
-parser.add_argument('--train_batch_size', type=int, default=64)
-parser.add_argument('--val_batch_size', type=int, default=64)
+parser.add_argument('--lang_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_scene_text_data.hdf5")
+parser.add_argument('--pc_dataset_path', type=str, default=Path(DATA_FOLDER) / "aligned_scene_pc_data.hdf5")
+parser.add_argument('--categories', type=str_list, default=["scenes"], help="all, chair, table, or scenes (alone)")
+parser.add_argument('--train_batch_size', type=int, default=32)
+parser.add_argument('--val_batch_size', type=int, default=16)
 parser.add_argument('--gen_ckpt', type=str, default= None)
 parser.add_argument('--gen_model', type=str, default='flow', choices=['flow', 'gaussian', 'AE'])
 parser.add_argument('--gen_flexibility', type=float, default=0.0)
-parser.add_argument('--gen_sample_num_points', type=int, default=2048) # 4352
-parser.add_argument('--num_steps', type=int, default=200)
-parser.add_argument('--beta_1', type=float, default=1e-4)
-parser.add_argument('--beta_T', type=float, default=0.05)
+parser.add_argument('--gen_sample_num_points', type=int, default=4352) # 4352
+parser.add_argument('--num_steps', type=int, default=300)
+parser.add_argument('--beta_1', type=float, default=5 * 1e-5)
+parser.add_argument('--beta_T', type=float, default=0.025)
 parser.add_argument('--sched_mode', type=str, default='linear')
 parser.add_argument('--residual', type=eval, default=True, choices=[True, False])
 parser.add_argument('--backbone_freeze', type=eval, default=False, choices=[True, False])
@@ -200,8 +199,8 @@ def save_render(path, it, ind, title, data):
     plt.savefig(str(path / title.format(it=it, ind=ind)).replace(": ", "_"))
     plt.close(fig)
 # Train, validate
-loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[]}
-epi_loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[]}
+loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[], "L1":[]}
+epi_loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[], "L1":[]}
 epi_iters = []
 
 def train(it):
@@ -215,7 +214,7 @@ def train(it):
     model.train()
 
     # Forward
-    loss, contrast_loss, text_loss, pc_loss = model.get_loss(x, batch_pcs, args.loss_weights, return_components=True)
+    loss, contrast_loss, text_loss, pc_loss, l1_loss = model.get_loss(x, batch_pcs, args.loss_weights, return_components=True)
     # Backward and optimize
     loss.backward()
     # orig_grad_norm = clip_grad_norm_(model.parameters(), args.max_grad_norm)
@@ -228,6 +227,7 @@ def train(it):
         loss_store["Contrast"].append(contrast_loss.item())
         loss_store["Text"].append(text_loss.item())
         loss_store["PC"].append(pc_loss.item())
+        loss_store["L1"].append(l1_loss.item())
     # writer.add_scalar('train/loss', loss, it)
     # writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], it)
     # writer.add_scalar('train/grad_norm', orig_grad_norm, it)
@@ -247,7 +247,7 @@ def train(it):
             plt.ylabel("Mean Loss Over Last {freq} Iters".format(freq=args.val_freq))
             plt.savefig(log_dir / "figures" / "losses" / "TRAIN_{key}_LOSS.png".format(key=loss_key.upper()))
             plt.close()
-        loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[]}
+        loss_store = {"Sum":[], "Contrast":[], "Text":[], "PC":[], "L1":[]}
         all_refscons = []
         all_pccons = []
         all_textcons = []

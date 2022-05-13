@@ -93,6 +93,6 @@ class FullEncoderDecoder(nn.Module):
         pc_loss = self.decoder.get_loss(pc, code_pc)
         sum_loss = weight[0] * contrast_loss + weight[1] * text_loss + weight[2] * pc_loss + weight[3] * l1_loss
         if (return_components):
-            return sum_loss, contrast_loss, text_loss, pc_loss
+            return sum_loss, contrast_loss, text_loss, pc_loss, l1_loss
         else:
             return sum_loss
